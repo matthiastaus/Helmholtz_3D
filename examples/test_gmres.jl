@@ -1,4 +1,5 @@
-# Script to test the Helmholtz system in 3D
+# Script to test the method of polarized traces to
+# solve the 2D Helmholtz equation
 
 # loading the functions needed to build the system
 include("../src/subdomain.jl");
@@ -30,7 +31,7 @@ K     = nz/6;
 omega = 2*pi*K;
 
 #m = ones(nx,ny,nz);
-# the squared slowness, inthis case constant velocity
+# the squared slowness, we have a constant speed plus some bumps
 m = zeros(Float64, nx,ny,nz);
 
 function bump(x,y,z,center, amplitude)
@@ -55,23 +56,15 @@ f = zeros(nx,ny,nz);
 f[20,20,15] = n;
 
 
-# # building teh Global solver for debugging purpouses
-# Global_solver = Subdomain(m,npml,[0 0 0],h,fac,order,omega);
-# #obtaining the global solution
-# uGlobal = solve(Global_solver,f);
-# uGlobal = reshape(uGlobal,nx,ny,nz);
-# uGlobalBdy = uGlobal[:,:, [20,21,30,31,40,41] ][:] ;
-
 # bulding the matrix
-print("Building the subdomains and factorizing the problems locally \n")
+println("Building the subdomains and factorizing the problems locally \n")
 subArray = { Subdomain(m[:,:,(1:nzd)+nzi*(ii-1)],npml,[0 0 z[1+npml+nzi*(ii-1)]],
 			 h,fac,order,omega) for ii=1:nLayer};
 
 
 ####################################################################################
 # Solving the local problem
-println(" partitioning the source")
-# partitioning the source % TODO make it a function
+println("Partitioning the source")
 
 # partitioning the source % TODO make it a function
 ff = sourcePartition(f, nx,ny,nz, npml,nzi,nLayer );
@@ -91,33 +84,12 @@ uBdyPol = vectorizePolarizedBdyData(uBdyData);
 # building the Permutation matriz P
 P = generatePermutationMatrix(nx,ny,nLayer );
 
-####################################################################
-##############    Gauss-Seidel
-
-
+# getting the rhs in the correct form (we need a minus in fron of it)
 uBdyPer = -uBdyPol;
-# u = 0*uBdyPer;
-# for ii = 1:10
-#     # splitting the vector in two parts
-#     udown = u[1:end/2];
-#     uup   = u[(1+end/2):end];
-#     # f - Ru^{n-1}
-#     udownaux = uBdyPer[1:end/2]       - applyU(subArray, uup);
-#     uupaux   = uBdyPer[(1+end/2):end] ;
 
-#     vdown = applyDinvDown(subArray,udownaux);
-#     vup   = applyDinvUp(subArray, uupaux - applyL(subArray,vdown));
-
-#     unew = vcat(vdown, vup );
-
-#     println(norm(applyMM(subArray, u) - P'* uBdyPer)/norm(uBdyPer))
-#     u = unew;
-# end
-
-# uprecond = u;
-
-####################################################################
-##############    GMRES
+# gmres is a bit buggy and it needs to define an object that support
+# for the preconditioners. In this case we build the preconditioned
+# system by hand and we use gmres to solve it.
 function PinvMM(v)
     uDummy =  PrecondGaussSeidel(subArray, P*(applyMM(subArray,v)),2)
     return uDummy
@@ -128,21 +100,22 @@ u = u0;
 
 using IterativeSolvers
 
+##############  GMRES #####################
 # solving for the traces
 data = gmres!(u,PinvMM,u0; tol=0.0001);
 
-
-println("number of iteration of GMRES ", countnz( data[2].residuals[:]))
+println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 
 #########################################################################
+# testing that we obtained the good solution
 
-#println("Difference between GS and Gmres solutions = " ,norm(u-uprecond))
-
+# we apply the polarized matrix to u to check for the error
 MMu = applyMM(subArray, u);
 
 println("Error for the polarized boundary integral system = ", norm(MMu - P'*uBdyPer));
 
 # adding the polarized traces to obtain the traces
+# u = u^{\uparrow} + u^{\downarrow}
 uBdySol = u[1:end/2]+u[(1+end/2):end];
 
 uGamma = -vectorizeBdyData(uBdyData);
@@ -151,6 +124,9 @@ Mu = applyM(subArray, uBdySol);
 
 # checking that we recover the good solution
 println("Error for the boundary integral system = ", norm(Mu - uGamma));
+
+########### Reconstruction ###############
+# TODO this needs to be encapsulated too
 
 # using the devectorization routine to use a simple for afterwards
 uBdySolArray = devectorizeBdyData(subArray, uBdySol);
@@ -170,10 +146,9 @@ end
 ii = nLayer-1;
 uSol[:,:,npml+(1:(nzi+npml))+ii*nzi] =  reshape(uSolArray[ii+1],nx,ny,nzi+2*npml)[:,:,npml+(1:(nzi+npml))];
 
-print("Assembling the Hemholtz Matrix \n")
-H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
+# # We can build the global operator and test the error
+# print("Assembling the Hemholtz Matrix \n")
+# H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
 
-sum(abs(H*uSol[:] - f[:]))
-#error = uSol - uGlobal;
+# sum(abs(H*uSol[:] - f[:]))
 
-#println("Error of the reconstruncted solution = ", norm(error[:]))
