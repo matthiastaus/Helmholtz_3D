@@ -6,4 +6,6 @@ This is an early prototype, which main purpouse is to show to design transmissio
 
 The notation was mostly taken from Zepeda-Núñez and Demanet, "The method of polarized traces for the 2D Helmholtz equation, JCP 2015"
 
-We thank TOTAL for their genereous support.
+This code was mainly developed under Julia 0.3, it will work for newer versions but you may have a large amount of warnings. You will need the package IterativeSolvers in order to run the examples.
+
+We thank TOTAL for the genereous support.
