@@ -5,7 +5,7 @@ include("HelmholtzMatrix.jl");
 type Subdomain
     H::SparseMatrixCSC{Complex{Float64},Int64} # sparse matrix
     # local meshes
-    h::FloatingPoint
+    h::Float64
     x     #mesh in x
     y
     z
@@ -19,7 +19,7 @@ type Subdomain
     zLimInd::Array{Int64,2}
     Hinv
     size
-    function Subdomain(m,npml::Int,bdy,h::FloatingPoint,fac::FloatingPoint,order::Int,omega)
+    function Subdomain(m,npml::Int,bdy,h::Float64,fac::Float64,order::Int,omega::Float64)
         # m = matrix(nx,ny,nz)
         # extracting the size of the 3D domain
         (nx,ny,nz) = size(m);
@@ -34,10 +34,10 @@ type Subdomain
         yLim = [ y[npml] y[npml+1] y[ny-npml] y[ny-npml+1]];
         zLim = [ z[npml] z[npml+1] z[nz-npml] z[nz-npml+1]];
 
-        zLimInd= [ [(1:nx*ny) + (npml-1)*nx*ny    ].'  ;
-                   [(1:nx*ny) + (npml)*nx*ny      ].' ;
-                   [(1:nx*ny) + (nz-npml-1)*nx*ny   ].' ;
-                   [(1:nx*ny) + (nz-npml)*nx*ny ].' ; ];
+        zLimInd= [ (collect(1:nx*ny) + (npml-1)*nx*ny    ).'  ;
+                   (collect(1:nx*ny) + (npml)*nx*ny      ).' ;
+                   (collect(1:nx*ny) + (nz-npml-1)*nx*ny ).' ;
+                   (collect(1:nx*ny) + (nz-npml)*nx*ny   ).' ; ];
 
         new(H,h,x,y,z,xLim,yLim,zLim,[7 3],[8 2],zLimInd, lufact(H), [nx*ny*nz,nx,ny,nz]) # don't know if it's the best answer
     end
@@ -120,7 +120,7 @@ end
 function vectorizeBdyData(uBdyData)
     # function to take the output of extract Boundary data and put it in vectorized form
     nLayer = size(uBdyData)[1]
-    nn     = size(uBdyData[1][1])[2]
+    nn     = size(uBdyData[1][1])[1]
 
     uBdy = zeros(Complex{Float64},2*(nLayer-1)*nn);
 
@@ -139,7 +139,7 @@ end
 function vectorizePolarizedBdyData(uBdyData)
     # function to take the output of extract Boundary data and put it in vectorized form
     nLayer = size(uBdyData)[1]
-    nSurf  = size(uBdyData[1][1])[2]
+    nSurf  = size(uBdyData[1][1])[1]
 
     uBdy = zeros(Complex{Float64},4*(nLayer-1)*nSurf);
 
@@ -168,7 +168,7 @@ function applyM(subArray, uGamma)
     (v0,v1,vN,vNp ) = devectorizeBdyData(subArray, uGamma)
 
     # applying
-    Au = { applyBlockOperator(subArray[ii],v0[ii],v1[ii],vN[ii],vNp[ii]) for ii = 1:nLayer };
+    Au = [ applyBlockOperator(subArray[ii],v0[ii],v1[ii],vN[ii],vNp[ii]) for ii = 1:nLayer ];
 
     # it need to be a vector
     Au = vectorizeBdyData(Au);
@@ -194,8 +194,8 @@ function applyMup(subArray, uGamma)
     nInd = 1:nSurf;
 
     # applying
-    v1 = { applyBlockOperator(subArray[ii],0*u0[ii],0*u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer };
-    vN = { applyBlockOperator(subArray[ii],  u0[ii],  u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer };
+    v1 =  [applyBlockOperator(subArray[ii],0*u0[ii],0*u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer] ;
+    vN =  [applyBlockOperator(subArray[ii],  u0[ii],  u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer] ;
 
     Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
@@ -226,8 +226,8 @@ function applyMdown(subArray, uGamma)
     nInd = 1:nSurf;
 
     # applying the local solves (for loop)
-    v1 = { applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer };
-    vN = { applyBlockOperator(subArray[ii],u0[ii],u1[ii],0*uN[ii],0*uNp[ii]) for ii = 1:nLayer };
+    v1 =  [applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer] ;
+    vN =  [applyBlockOperator(subArray[ii],u0[ii],u1[ii],0*uN[ii],0*uNp[ii]) for ii = 1:nLayer] ;
 
     Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
@@ -259,8 +259,8 @@ function applyM0up(subArray, uGamma)
     # applying
     # remember  v[ii][1] = v0[ii], v[ii][2] = v1[ii],
     #           v[ii][3] = vN[ii], v[ii][4] = vNp[ii]
-    v1 = { applyBlockOperator(subArray[ii],0*u0[ii],0*u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer };
-    vN = { applyBlockOperator(subArray[ii],  u0[ii],  u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer };
+    v1 =  [applyBlockOperator(subArray[ii],0*u0[ii],0*u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer] ;
+    vN =  [applyBlockOperator(subArray[ii],  u0[ii],  u1[ii],uN[ii],uNp[ii]) for ii = 1:nLayer] ;
 
     Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
@@ -291,8 +291,8 @@ function applyM0down(subArray, uGamma)
     nInd = 1:nSurf;
 
     # applying the local solves (for loop)
-    v1 = { applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer };
-    vN = { applyBlockOperator(subArray[ii],u0[ii],u1[ii],0*uN[ii],0*uNp[ii]) for ii = 1:nLayer };
+    v1 =  [applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer] ;
+    vN =  [applyBlockOperator(subArray[ii],u0[ii],u1[ii],0*uN[ii],0*uNp[ii]) for ii = 1:nLayer] ;
 
     Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
@@ -311,8 +311,8 @@ end
 function applyMM(subArray, uGammaPol)
     # function to apply the the polarized integral operator
     println("Applying the polarized matrix")
-    uDown = uGammaPol[1:end/2];
-    uUp = uGammaPol[(end/2+1):end];
+    uDown = uGammaPol[1:round(Int64,end/2)];
+    uUp = uGammaPol[(round(Int64,end/2)+1):end];
 
     MMu = vcat(applyMdown( subArray, uDown) + applyMup( subArray, uUp),
                applyM0down(subArray, uDown) + applyM0up(subArray, uUp));
@@ -335,7 +335,7 @@ function applyL(subArray, uGamma)
     nInd = 1:nSurf;
 
     # applying the local solves (for loop)
-    v1 = { applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer };
+    v1 =  [applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer] ;
 
     Lu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
@@ -485,7 +485,7 @@ function applyU(subArray, uGamma)
     nInd = 1:nSurf;
 
     # applying the local solves (for loop)
-    v1 = { applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer };
+    v1 =  [applyBlockOperator(subArray[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer ];
 
     Lu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
@@ -581,7 +581,7 @@ function generatePermutationMatrix(nx,ny,nLayer )
     E = speye(4*(nLayer-1));
     p_aux   = kron(linspace(1, 2*(nLayer-1)-1, nLayer-1 ).', [1 1]) + kron(ones(1,nLayer-1), [0 2*(nLayer-1) ]);
     p_aux_2 = kron(linspace(2, 2*(nLayer-1) , nLayer-1 ).', [1 1]) + kron(ones(1,nLayer-1), [2*(nLayer-1) 0]);
-    p = E[vec(hcat(int(p_aux), int(p_aux_2))),: ];
+    p = E[vec(hcat(round(Int64,p_aux), round(Int64,p_aux_2))),: ];
     P = kron(p, speye(nSurf));
     return P;
 end

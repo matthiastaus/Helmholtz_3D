@@ -62,12 +62,12 @@ function FirstOrderDifferenceMatrix1d(nx::Int,h::FloatingPoint,order::Int)
   diagonals = repmat(FDweights(order/2,linspace(0,order,order+1),1)'/h,nx,1);
   Dx = spzeros(nx,nx);
   for ii = 1:order+1
-    bound = abs(-int(order/2)-1+ii);
-    Dx = Dx + spdiagm(diagonals[1:end-int(bound),ii] ,-int(order/2)-1+ii,nx,nx);
+    bound = abs(-round(Int,order/2)-1+ii);
+    Dx = Dx + spdiagm(diagonals[1:end-round(Int,bound),ii] ,-round(Int,order/2)-1+ii,nx,nx);
   end
 
   # modifing the matrix at the boundaries, using descentered stencils
-   for ii = 1:(int(order/2)-1)
+   for ii = 1:(round(Int,order/2)-1)
      weights = FDweights(ii,linspace(0,order+2,order+3),1)'/h;
      Dx[ii,1:order+2]=weights[2:end];
 
@@ -93,13 +93,13 @@ function stiffness_matrix(nx::Int, dx::FloatingPoint, order::Int)
   # creating the matrix Dxx, this should be modified but spdiagm only accepts one
   # diagonal at a time
   for ii = 1:order+1
-    bound = abs(-int(order/2)-1+ii);
-    Dxx = Dxx + spdiagm(diagonals[1:end-int(bound),ii],-int(order/2)-1+ii,nx,nx);
+    bound = abs(-round(Int,order/2)-1+ii);
+    Dxx = Dxx + spdiagm(diagonals[1:end-round(Int,bound),ii],-round(Int,order/2)-1+ii,nx,nx);
   end
 
   # modifying the matrix at the boundaries to obtain an uniform accuracy
   # using descentered stencil at the boundaries
-  for ii = 1:(int(order/2)-1)
+  for ii = 1:(round(Int,order/2)-1)
     # modifying on end of the matrix with the correct descentered stencil
      weights = FDweights(ii,linspace(0,order+2,order+3),2)'/(dx^2);
      Dxx[ii,1:order+2]=weights[2:end];
