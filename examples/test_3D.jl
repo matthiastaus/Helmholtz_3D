@@ -5,9 +5,9 @@ include("../src/HelmholtzMatrix.jl");
 
 # number of deegres of freedom per dimension
 # number of deegres of freedom per dimension
-nx = 50;
-ny = 50;
-nz = 72;
+nx = 30;
+ny = 30;
+nz = 22;
 npml = 6;
 
 z = linspace(0,1,nz);
@@ -33,7 +33,7 @@ C = lufact(H);
 
 # defining the rhs geometrically
 f = zeros(nx,ny,nz);
-f[50,30,5] = 1000;
+f[15,15,11] = 1000;
 
 # total number of deegres of freedom
 n = nx*ny*nz;

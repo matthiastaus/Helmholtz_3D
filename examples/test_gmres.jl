@@ -5,16 +5,16 @@
 include("../src/subdomain.jl");
 include("../src/preconditioners.jl")
 # number of deegres of freedom per dimension
-nx = 40;
-ny = 40;
-nz = 62;
+nx = 20;
+ny = 20;
+nz = 52;
 npml = 6;
 
 # number of layers
-nLayer = 5;
+nLayer = 4;
 
 # interior degrees of freedom
-nzi = int((nz-2*npml)/nLayer);
+nzi = round(Int,(nz-2*npml)/nLayer);
 # extended deegres of freedom
 nzd = nzi+2*npml;
 
@@ -53,13 +53,14 @@ println("Solving the Helmholtz equation for nx = ",nx,", ny = ",ny, ", nz = ",nz
 # defining the full source (point source in this case)
 n = nx*ny*nz;
 f = zeros(nx,ny,nz);
-f[20,20,15] = n;
+# due to a bug the source needs to be in the top layer
+f[11,11,11] = n;
 
 
 # bulding the matrix
 println("Building the subdomains and factorizing the problems locally \n")
-subArray = { Subdomain(m[:,:,(1:nzd)+nzi*(ii-1)],npml,[0 0 z[1+npml+nzi*(ii-1)]],
-			 h,fac,order,omega) for ii=1:nLayer};
+subArray = [Subdomain(m[:,:,(1:nzd)+nzi*(ii-1)],npml,[0 0 z[1+npml+nzi*(ii-1)]],
+			 h,fac,order,omega) for ii=1:nLayer];
 
 
 ####################################################################################
@@ -73,9 +74,10 @@ ff = sourcePartition(f, nx,ny,nz, npml,nzi,nLayer );
 uArray = {solve(subArray[ii], ff[ii]) for ii=1:nLayer};
 
 # obdatin all the boundary data here (just be carefull with the first and last components)
-uBdyData = {extractBoundaryData(subArray[ii], uArray[ii]) for ii=1:nLayer  };
+uBdyData = [extractBoundaryData(subArray[ii], uArray[ii]) for ii=1:nLayer  ];
 
 # vectorizing using the polarized construction
+# there is a bug inside this function!!!! 
 uBdyPol = vectorizePolarizedBdyData(uBdyData);
 
 ##################################################################################
@@ -87,22 +89,17 @@ P = generatePermutationMatrix(nx,ny,nLayer );
 # getting the rhs in the correct form (we need a minus in fron of it)
 uBdyPer = -uBdyPol;
 
-# gmres is a bit buggy and it needs to define an object that support
-# for the preconditioners. In this case we build the preconditioned
-# system by hand and we use gmres to solve it.
-function PinvMM(v)
-    uDummy =  PrecondGaussSeidel(subArray, P*(applyMM(subArray,v)),2)
-    return uDummy
-end
-
-u0 = PrecondGaussSeidel(subArray,-uBdyPol,2);
-u = u0;
+# using the preconditioner (it needs to be optimized)
+Precond = PolarizedTracesPreconditioner(subArray, P)
 
 using IterativeSolvers
 
 ##############  GMRES #####################
-# solving for the traces
-data = gmres!(u,PinvMM,u0; tol=0.0001);
+# # solving for the traces
+
+u = 0*uBdyPol;
+data = gmres!(u,x->applyMM(subArray,x), P'*uBdyPer, Precond; tol=0.00001);
+
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 
@@ -123,7 +120,7 @@ uGamma = -vectorizeBdyData(uBdyData);
 Mu = applyM(subArray, uBdySol);
 
 # checking that we recover the good solution
-println("Error for the boundary integral system = ", norm(Mu - uGamma));
+println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGamma));
 
 ########### Reconstruction ###############
 # TODO this needs to be encapsulated too
@@ -131,9 +128,9 @@ println("Error for the boundary integral system = ", norm(Mu - uGamma));
 # using the devectorization routine to use a simple for afterwards
 uBdySolArray = devectorizeBdyData(subArray, uBdySol);
 
-uSolArray = {reconstructLocally(subArray[ii],ff[ii], uBdySolArray[1][ii],
+uSolArray = [reconstructLocally(subArray[ii],ff[ii], uBdySolArray[1][ii],
                                 uBdySolArray[2][ii], uBdySolArray[3][ii],
-                                uBdySolArray[4][ii]) for ii = 1:nLayer}
+                                uBdySolArray[4][ii]) for ii = 1:nLayer];
 
 #concatenation fo the solution
 uSol = zeros(Complex{Float64},nx,ny,nz);
