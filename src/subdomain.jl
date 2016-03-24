@@ -120,7 +120,8 @@ end
 function vectorizeBdyData(uBdyData)
     # function to take the output of extract Boundary data and put it in vectorized form
     nLayer = size(uBdyData)[1]
-    nn     = size(uBdyData[1][1])[1]
+    # nn     = size(uBdyData[1][1])[1] # depends on the version
+    nn     = length(uBdyData[1][1])
 
     uBdy = zeros(Complex{Float64},2*(nLayer-1)*nn);
 
@@ -139,7 +140,7 @@ end
 function vectorizePolarizedBdyData(uBdyData)
     # function to take the output of extract Boundary data and put it in vectorized form
     nLayer = size(uBdyData)[1]
-    nSurf  = size(uBdyData[1][1])[1]
+    nSurf  = length(uBdyData[1][1])
 
     uBdy = zeros(Complex{Float64},4*(nLayer-1)*nSurf);
 
@@ -319,6 +320,61 @@ function applyMM(subArray, uGammaPol)
     return MMu;
 
 end
+
+function applyMMOpt(subDomains, uGamma)
+    # function to apply M to uGamma
+    # input subDomains : an array of subdomains
+    #       uGamma   : data on the boundaries in vector form
+
+    uDown = uGamma[1:round(Integer, end/2)]
+    uUp   = uGamma[1+round(Integer, end/2):end]
+    # convert uGamma in a suitable vector to be applied
+    (u0Down,u1Down,uNDown,uNpDown) = devectorizeBdyData(subDomains, uDown);
+    (u0Up  ,u1Up  ,uNUp  ,uNpUp)   = devectorizeBdyData(subDomains, uUp);
+
+    # obtaining the number of layers
+    nLayer = size(subDomains)[1];
+    nSurf = subArray[1].size[2]*subArray[1].size[3];
+    nInd = 1:nSurf;
+
+    #TODO modify this functio in order to solve the three rhs in one shot
+    # applying this has to be done in parallel applying RemoteRefs
+    v1 = [ applyBlockOperator(subDomains[ii],u0Down[ii]         ,u1Down[ii]         ,
+                              uNUp[ii]+uNDown[ii],uNpUp[ii]+uNpDown[ii]) for ii = 1:nLayer ];
+    vN = [ applyBlockOperator(subDomains[ii],u0Down[ii]+u0Up[ii],u1Down[ii]+u1Up[ii],
+                              uNUp[ii]           ,uNpUp[ii]            ) for ii = 1:nLayer ];
+
+    Mu1 = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+    Mu1[nInd] = - uNUp[1] - uNDown[1] + vec(vN[1][3]);
+
+    for ii=1:nLayer-2
+        Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[ii+1] - u1Down[ii+1] + vec(v1[ii+1][2]);
+        Mu1[nInd + (2*ii  )*nSurf] = - uNUp[ii+1] - uNDown[ii+1] + vec(vN[ii+1][3]);
+    end
+    ii = nLayer-1;
+    Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[ii+1] - u1Down[ii+1] + vec(v1[ii+1][2]) ;
+
+
+    v1 = [ applyBlockOperator(subDomains[ii],u0Down[ii],u1Down[ii],uNUp[ii]+uNDown[ii],uNpUp[ii]+uNpDown[ii]) for ii = 1:nLayer ];
+    vN = [ applyBlockOperator(subDomains[ii],u0Up[ii]+u0Down[ii],u1Down[ii]+u1Up[ii],uNUp[ii],uNpUp[ii]) for ii = 1:nLayer ];
+
+    Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+
+    Mu[nInd] =  vec(vN[1][4])- uNpDown[1] ;
+
+    for ii=1:nLayer-2
+        Mu[nInd + (2*ii-1)*nSurf] = - u0Up[ii+1] + vec(v1[ii+1][1]);
+        Mu[nInd + (2*ii  )*nSurf] = - uNpDown[ii+1] + vec(vN[ii+1][4]);
+    end
+    ii = nLayer-1;
+    Mu[nInd + (2*ii-1)*nSurf] = -  u0Up[ii+1] + vec(v1[ii+1][1])
+
+    return vcat(Mu1,Mu)
+
+end
+
 
 
 function applyL(subArray, uGamma)
@@ -505,10 +561,10 @@ end
 function devectorizeBdyData(subArray, uGamma)
     # function to tranform the vectorial uGamma in to a set of 4 arrays for an easier
     # evaluation of the integral operators
-    v0  = {};
-    v1  = {};
-    vN  = {};
-    vNp = {};
+    v0  = [];
+    v1  = [];
+    vN  = [];
+    vNp = [];
     # obtaining the number of layers
     nLayer = size(subArray)[1];
     nSurf = subArray[1].size[2]*subArray[1].size[3];

@@ -1,14 +1,14 @@
 type PolarizedTracesPreconditioner
-    subArray 
-    P   # permutation matrix 
+    subArray
+    P   # permutation matrix
     nIt::Int64
     typePrecond::ASCIIString
-    
+
      function PolarizedTracesPreconditioner(subArray, P; typePrecond="GS",nIt = 1)
         new(subArray,P, nIt, typePrecond) # don't know if it's the best answer
     end
 end
- 
+
 
 
 # Encapsulation of the preconditioner in order to use preconditioned GMRES
@@ -16,7 +16,7 @@ import Base.\
 
 function \(M::PolarizedTracesPreconditioner, v::Array{Complex128,1})
     #println("Applying the polarized Traces Preconditioner")
-    # Allocating the space 
+    # Allocating the space
     u = zeros(v)
     if M.typePrecond == "GS"
         u =  PrecondGaussSeidel(M.subArray, M.P*v, M.nIt)
@@ -28,7 +28,7 @@ function \(M::PolarizedTracesPreconditioner, v::Array{Complex128,1})
 end
 
 
-function PrecondJacobi(subArray, v, nit::Int64)
+function PrecondJacobi(subArray, v::Array{Complex128,1}, nit::Int64)
     # function to apply the block Gauss-Seidel Preconditioner
     # input :   subArray  array pointer to the set of subdomains
     #           v         rhs to be solved
@@ -52,7 +52,7 @@ function PrecondJacobi(subArray, v, nit::Int64)
 end
 
 
-function PrecondGaussSeidel(subArray, v, nit::Int64)
+function PrecondGaussSeidel(subArray, v::Array{Complex128,1}, nit::Int64)
     # function to apply the block Gauss-Seidel Preconditioner
     # input :   subArray  array pointer to the set of subdomains
     #           v         rhs to be solved
@@ -67,8 +67,12 @@ function PrecondGaussSeidel(subArray, v, nit::Int64)
         uup   = u[(1+round(Int,end/2)):end];
 
         # f - Ru^{n-1}
-        udownaux = v[1:round(Int,end/2)] - applyU(subArray, uup);
-        uupaux   = v[(1+round(Int,end/2)):end] ;
+        if norm(u)  != 0
+            udownaux = v[1:round(Integer,end/2)]       - applyU(subArray, uup);
+        else
+            udownaux = v[1:round(Integer,end/2)]
+        end
+        uupaux   = v[(1+round(Integer,end/2)):end] ;
 
         # applying the inverses
         vdown = applyDinvDown(subArray,udownaux);
