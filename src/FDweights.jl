@@ -2,7 +2,7 @@
 # plus PML. This file is the basis for the construction of the
 # Helmholtz operator
 
-function FDweights(z,x,m::Int)
+function FDweights(z,x,m::Int64)
 #---------------------------------
 # finite-difference weights
 # (Fornberg algorithm)
@@ -48,8 +48,8 @@ function FDweights(z,x,m::Int)
   return cwei
 end
 
-function FirstOrderDifferenceMatrix1d(nx::Int,h::FloatingPoint,order::Int)
-  # function Dx = FirstOrderDifferenceMatrix1d(nx,h::FloatingPoint,order::Int)
+function FirstOrderDifferenceMatrix1d(nx::Int64,h::Float64,order::Int64)
+  # function Dx = FirstOrderDifferenceMatrix1d(nx,h::Float64,order::Int64)
   # function to compute the first order finite different matrix using
   # the Fornberg algorithm to compute the stencil, with a descentered stencil
   # at the edges
@@ -77,8 +77,8 @@ function FirstOrderDifferenceMatrix1d(nx::Int,h::FloatingPoint,order::Int)
   return Dx
 end
 
-function stiffness_matrix(nx::Int, dx::FloatingPoint, order::Int)
-  # function Dxx = stiffness_matrix(nx::Int, dx::FloatingPoint, order::Int)
+function stiffness_matrix(nx::Int64, dx::Float64, order::Int64)
+  # function Dxx = stiffness_matrix(nx::Int64, dx::Float64, order::Int64)
   # function to compute a 1D stiffness Matrix using  finite differences
   # (Dirichlet boundary nodes are not on the grid)
   # input :   nx    size of the matrix to be generated
@@ -112,7 +112,7 @@ function stiffness_matrix(nx::Int, dx::FloatingPoint, order::Int)
    return Dxx
 end
 
-function DistribPML(nx::Int,ny::Int,nz::Int, nPML::Int,fac::FloatingPoint)
+function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64)
   # function (sigmaX, sigmaY, sigmaZ) = DistribPML(nx,ny,nz, nPML,fac)
   # function to create the damping profile on the PML's
   # input :   nx   number of poinst in the x direction
@@ -130,7 +130,7 @@ function DistribPML(nx::Int,ny::Int,nz::Int, nPML::Int,fac::FloatingPoint)
   return (sigmaX, sigmaY, sigmaZ)
 end
 
-function DistribPMLDerivative(nx::Int,ny::Int,nz::Int, nPML::Int,fac::FloatingPoint)
+function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64)
   # function to create the derivative of the damping profile on the PML's
   # this is a compressed for loop, i don't know if it's vectorized or not
 
@@ -142,12 +142,12 @@ function DistribPMLDerivative(nx::Int,ny::Int,nz::Int, nPML::Int,fac::FloatingPo
 end
 
 
-function sigma(i::Int,n::Int,nPML::Int)
+function sigma(i::Int64,n::Int64,nPML::Int64)
   # pml function, we start one point after the boundary to enforce the continuity
   res = (i.<nPML).*((i-nPML).^2)/(nPML-1).^2 + (i.> (n-nPML+1)).*((i-n+nPML-1).^2)/(nPML-1).^2;
 end
 
-function Dxsigma(i::Int,n::Int,nPML::Int)
+function Dxsigma(i::Int64,n::Int64,nPML::Int64)
   # derivative of the pml function, we start one point after the boundary to enforce the continuity
   res = -2*(i.<nPML).*((i-nPML))/(nPML-1).^2 + 2*(i.> (n-nPML+1)).*((i-n+nPML-1))/(nPML-1).^2;
 end
