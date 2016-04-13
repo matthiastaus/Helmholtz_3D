@@ -4,31 +4,36 @@
 # loading the functions needed to build the system
 include("../src/subdomain.jl");
 include("../src/preconditioners.jl")
+using IterativeSolvers
+
 # number of deegres of freedom per dimension
-nx = 20;
-ny = 20;
-nz = 52;
-npml = 6;
+nx = 40;
+ny = 40;
+nz = 70;
+npml = 5;
 
 # number of layers
-nLayer = 4;
+nLayer = 6;
 
 # interior degrees of freedom
+# for simplicity we suppose that we have the same number of 
+# degrees of freedom at each layer
 nzi = round(Int,(nz-2*npml)/nLayer);
-# extended deegres of freedom
+# extended deegres of freedom within each layer
 nzd = nzi+2*npml;
 
-
+# we sample the z space, the solver is normalize such that the
+# z legnth of the computational domain is always 1
 z = linspace(0,1,nz);
 zInd = {npml+1+nzi*(ii-1) for ii = 1:nLayer}
 
 
 # extra arguments
-h     = z[2]-z[1];
-fac   = 20/(npml*h);
-order = 2;
-K     = nz/6;
-omega = 2*pi*K;
+h     = z[2]-z[1];    # mesh width
+fac   = 20/(npml*h);  # absorbition coefficient for the PML
+order = 2;            # order of the method, this should be changes
+K     = nz/6;         # wave number
+omega = 2*pi*K;       # frequency
 
 #m = ones(nx,ny,nz);
 # the squared slowness, we have a constant speed plus some bumps
@@ -54,7 +59,7 @@ println("Solving the Helmholtz equation for nx = ",nx,", ny = ",ny, ", nz = ",nz
 n = nx*ny*nz;
 f = zeros(nx,ny,nz);
 # due to a bug the source needs to be in the top layer
-f[11,11,11] = n;
+f[8,8,18] = n;
 
 
 # bulding the matrix
@@ -78,7 +83,7 @@ uBdyData = [extractBoundaryData(subArray[ii], uArray[ii]) for ii=1:nLayer  ];
 
 # vectorizing using the polarized construction
 # there is a bug inside this function!!!! 
-uBdyPol = vectorizePolarizedBdyData(uBdyData);
+uBdyPol = vectorizePolarizedBdyDataRHS(uBdyData);
 
 ##################################################################################
 #  Solving for the boundary data
@@ -92,24 +97,22 @@ uBdyPer = -uBdyPol;
 # using the preconditioner (it needs to be optimized)
 Precond = PolarizedTracesPreconditioner(subArray, P)
 
-using IterativeSolvers
-
 ##############  GMRES #####################
 # # solving for the traces
 
 u = 0*uBdyPol;
-data = gmres!(u,x->applyMM(subArray,x), P'*uBdyPer, Precond; tol=0.00001);
+data = gmres!(u,x->applyMM(subArray,x), uBdyPer, Precond; tol=0.00001);
 
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 
 #########################################################################
-# testing that we obtained the good solution
+# testing the solution
 
 # we apply the polarized matrix to u to check for the error
 MMu = applyMM(subArray, u);
 
-println("Error for the polarized boundary integral system = ", norm(MMu - P'*uBdyPer));
+println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer));
 
 # adding the polarized traces to obtain the traces
 # u = u^{\uparrow} + u^{\downarrow}
@@ -145,7 +148,7 @@ uSol[:,:,npml+(1:(nzi+npml))+ii*nzi] =  reshape(uSolArray[ii+1],nx,ny,nzi+2*npml
 
 # # We can build the global operator and test the error
 # print("Assembling the Hemholtz Matrix \n")
-# H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
+ H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
 
-# sum(abs(H*uSol[:] - f[:]))
+ norm(H*uSol[:] - f[:])/norm(f[:])
 
