@@ -162,6 +162,31 @@ function vectorizePolarizedBdyData(uBdyData)
     return uBdy
 end
 
+function vectorizePolarizedBdyDataRHS(uBdyData)
+    # function to take the output of extract Boundary data and put it in vectorized form
+    nLayer = size(uBdyData)[1]
+    nSurf  = length(uBdyData[1][1])
+
+    uBdy1 = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+    uBdy0 = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+    nInd = 1:nSurf;
+
+
+    for ii = 1:nLayer-1
+        uBdy1[nInd+(2*ii-1)*nSurf] = uBdyData[ii][3];
+        uBdy1[nInd+(2*ii  )*nSurf] = uBdyData[ii+1][2];
+    end
+
+    for ii = 1:nLayer-2
+        uBdy0[nInd+(2*ii-1)*nSurf] = uBdyData[ii ][4];
+        uBdy0[nInd+(2*ii)*nSurf] = uBdyData[ii+1][1];
+    end
+
+    return vcat(uBdy1,uBdy0)
+end
+
+
 function applyM(subArray, uGamma)
     # function to apply M to uGamma
 
