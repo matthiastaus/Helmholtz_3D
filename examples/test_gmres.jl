@@ -1,5 +1,5 @@
 # Script to test the method of polarized traces to
-# solve the 2D Helmholtz equation
+# solve the 3D Helmholtz equation
 
 # loading the functions needed to build the system
 include("../src/subdomain.jl");
@@ -9,8 +9,8 @@ using IterativeSolvers
 # number of deegres of freedom per dimension
 nx = 40;
 ny = 40;
-nz = 70;
-npml = 5;
+nz = 72;
+npml = 6;
 
 # number of layers
 nLayer = 6;
@@ -25,7 +25,7 @@ nzd = nzi+2*npml;
 # we sample the z space, the solver is normalize such that the
 # z legnth of the computational domain is always 1
 z = linspace(0,1,nz);
-zInd = {npml+1+nzi*(ii-1) for ii = 1:nLayer}
+zInd = [npml+1+nzi*(ii-1) for ii = 1:nLayer]
 
 
 # extra arguments
@@ -39,6 +39,8 @@ omega = 2*pi*K;       # frequency
 # the squared slowness, we have a constant speed plus some bumps
 m = zeros(Float64, nx,ny,nz);
 
+# we define the model that we will use, in this case it is just a sum of 3 
+# Gaussian bumps
 function bump(x,y,z,center, amplitude)
     return amplitude*( (x-center[1]).^2 + (y-center[2]).^2 + (x-center[3]).^2)
 end
@@ -62,7 +64,7 @@ f = zeros(nx,ny,nz);
 f[8,8,18] = n;
 
 
-# bulding the matrix
+# bulding the domain decomposition data structure
 println("Building the subdomains and factorizing the problems locally \n")
 subArray = [Subdomain(m[:,:,(1:nzd)+nzi*(ii-1)],npml,[0 0 z[1+npml+nzi*(ii-1)]],
 			 h,fac,order,omega) for ii=1:nLayer];
@@ -76,7 +78,7 @@ println("Partitioning the source")
 ff = sourcePartition(f, nx,ny,nz, npml,nzi,nLayer );
 
 # for loop for solving each system this should be done in parallel
-uArray = {solve(subArray[ii], ff[ii]) for ii=1:nLayer};
+uArray = [solve(subArray[ii], ff[ii]) for ii=1:nLayer];
 
 # obdatin all the boundary data here (just be carefull with the first and last components)
 uBdyData = [extractBoundaryData(subArray[ii], uArray[ii]) for ii=1:nLayer  ];
@@ -94,7 +96,7 @@ P = generatePermutationMatrix(nx,ny,nLayer );
 # getting the rhs in the correct form (we need a minus in fron of it)
 uBdyPer = -uBdyPol;
 
-# using the preconditioner (it needs to be optimized)
+# allocating the preconditioner
 Precond = PolarizedTracesPreconditioner(subArray, P)
 
 ##############  GMRES #####################

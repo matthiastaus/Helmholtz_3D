@@ -9,12 +9,12 @@ using IterativeSolvers
 
 # number of deegres of freedom per dimension
 nx = 40;
-ny = 72;
-nz = 72;
+ny = 52;
+nz = 52;
 npml = 6;
 
 # number of layers
-nLayer = 6;
+nLayer = 4;
 
 # interior degrees of freedom
 # for simplicity we suppose that we have the same number of 
@@ -26,12 +26,12 @@ nzd = nzi+2*npml;
 # we sample the z space, the solver is normalize such that the
 # z legnth of the computational domain is always 1
 z = linspace(0,1,nz);
-zInd = {npml+1+nzi*(ii-1) for ii = 1:nLayer}
+zInd = [npml+1+nzi*(ii-1) for ii = 1:nLayer]
 
 
 # extra arguments
 h     = z[2]-z[1];    # mesh width
-fac   = 20/(npml*h);  # absorbition coefficient for the PML
+fac   = 30/(npml*h);  # absorbition coefficient for the PML
 order = 2;            # order of the method, this should be changes
 K     = nz/6;         # wave number
 omega = 2*pi*K;       # frequency
@@ -262,7 +262,7 @@ Precond = PolarizedTracesPreconditioner(subArray, P)
 # # solving for the traces
 
 u = 0*uBdyPol;
-data = gmres!(u,x->applyMM(subArray,x), uBdyPer, Precond; tol=0.00001);
+@time data = gmres!(u,x->applyMM(subArray,x), uBdyPer, Precond; tol=0.00001);
 
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
