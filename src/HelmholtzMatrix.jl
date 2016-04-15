@@ -1,6 +1,6 @@
 include("FDweights.jl")
 
-function HelmholtzMatrix(m,nx::Int,ny::Int,nz::Int,npml::Int,h,fac,order::Int,omega)
+function HelmholtzMatrix(m,nx::Int64,ny::Int64,nz::Int64,npml::Int64,h::Float64,fac::Float64,order::Int64,omega)
   #function HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega)
 
   #  H = -(\triangle + \omega^2 m I)
