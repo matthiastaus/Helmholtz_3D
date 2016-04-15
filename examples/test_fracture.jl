@@ -9,9 +9,9 @@ using IterativeSolvers
 
 # number of deegres of freedom per dimension
 nx = 40;
-ny = 52;
-nz = 52;
-npml = 6;
+ny = 56;
+nz = 56;
+npml = 8;
 
 # number of layers
 nLayer = 4;
@@ -262,7 +262,7 @@ Precond = PolarizedTracesPreconditioner(subArray, P)
 # # solving for the traces
 
 u = 0*uBdyPol;
-@time data = gmres!(u,x->applyMM(subArray,x), uBdyPer, Precond; tol=0.00001);
+@time data = gmres!(u,x->applyMMOpt(subArray,x), uBdyPer, Precond; tol=0.00001);
 
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
@@ -271,13 +271,13 @@ println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 # testing the solution
 
 # we apply the polarized matrix to u to check for the error
-MMu = applyMM(subArray, u);
+MMu = applyMMOpt(subArray, u);
 
 println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer));
 
 # adding the polarized traces to obtain the traces
 # u = u^{\uparrow} + u^{\downarrow}
-uBdySol = u[1:end/2]+u[(1+end/2):end];
+uBdySol = u[1:round(Integer,end/2)]+u[(1+round(Integer,end/2)):end];
 
 uGamma = -vectorizeBdyData(uBdyData);
 
