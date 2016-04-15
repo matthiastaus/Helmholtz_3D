@@ -112,31 +112,48 @@ function stiffness_matrix(nx::Int64, dx::Float64, order::Int64)
    return Dxx
 end
 
-function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64)
+function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; profileType::ASCIIString = "quadratic" , m = 0)
   # function (sigmaX, sigmaY, sigmaZ) = DistribPML(nx,ny,nz, nPML,fac)
   # function to create the damping profile on the PML's
-  # input :   nx   number of poinst in the x direction
-  #           ny   number of poinst in the y direction
-  #           nz   number of poinst in the z direction
-  #           nPML number of PML points at each side
-  #           fact absorption factor for PML
+  # input :   nx:   number of poinst in the x direction
+  #           ny:   number of poinst in the y direction
+  #           nz:   number of poinst in the z direction
+  #           nPML: number of PML points at each side
+  #           fact: absorption factor for PML
+  #           profileType: type of the pml profile, by default it is set to 
+  #                        quadratic
+  #           m: slowness squared as an optional parameter
   # output:   (sigmaX, sigmaY, sigmaZ) pml profile in each direction
 
+  if profileType ==  "quadratic"
   # this is a compressed for loop, I don't know if it's vectorized or not
-  sigmaX = [fac*sigma(i,nx,nPML)+0*j+0*k for i=1:nx,j=1:ny,k=1:nz ];
-  sigmaY = [fac*sigma(j,ny,nPML)+0*i+0*k for i=1:nx,j=1:ny,k=1:nz ];
-  sigmaZ = [fac*sigma(k,nz,nPML)+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
+    sigmaX = [fac*sigma(i,nx,nPML)+0*j+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    sigmaY = [fac*sigma(j,ny,nPML)+0*i+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    sigmaZ = [fac*sigma(k,nz,nPML)+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
+  end
 
   return (sigmaX, sigmaY, sigmaZ)
 end
 
-function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64)
+function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; profileType::ASCIIString = "quadratic", m = 0)
   # function to create the derivative of the damping profile on the PML's
+  # input :   nx:   number of poinst in the x direction
+  #           ny:   number of poinst in the y direction
+  #           nz:   number of poinst in the z direction
+  #           nPML: number of PML points at each side
+  #           fact: absorption factor for PML
+  #           profileType: type of the pml profile, by default it is set to 
+  #                        quadratic
+  #           m: slowness squared as an optional parameter
+  # output:   (DxsigmaX, DysigmaY, DzsigmaZ) pml profile in each direction
+
   # this is a compressed for loop, i don't know if it's vectorized or not
 
-  DxsigmaX = [fac*Dxsigma(i,nx,nPML)+0*j+0*k for i=1:nx,j=1:ny,k=1:nz ];
-  DysigmaY = [fac*Dxsigma(j,ny,nPML)+0*i+0*k for i=1:nx,j=1:ny,k=1:nz ];
-  DzsigmaZ = [fac*Dxsigma(k,nz,nPML)+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
+  if profileType ==  "quadratic"
+    DxsigmaX = [fac*Dxsigma(i,nx,nPML)+0*j+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    DysigmaY = [fac*Dxsigma(j,ny,nPML)+0*i+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    DzsigmaZ = [fac*Dxsigma(k,nz,nPML)+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
+  end
 
   return (DxsigmaX, DysigmaY, DzsigmaZ)
 end
