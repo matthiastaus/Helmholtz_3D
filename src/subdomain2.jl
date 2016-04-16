@@ -1,6 +1,6 @@
 # Subdomain type
-# the main idea behind is to abstract all the information needed to perform the 
-# method of polarized traces. 
+# the main idea behind is to abstract all the information needed to perform the
+# method of polarized traces.
 
 include("HelmholtzMatrix.jl");
 include("model.jl")
@@ -21,7 +21,7 @@ type Subdomain
         indVolInt = extractVolIntIndices(model);
         indVol    = extractVolIndices(model);
         indVolIntLocal = extractVolIntLocalIndices(model);
-        new(model, ind_0, ind_1, ind_n, ind_np, indVolInt, indVol, indVolIntLocal) # don't know if it's the best answer
+        new(model, ind_0[:], ind_1[:], ind_n[:], ind_np[:], indVolInt[:], indVol[:], indVolIntLocal[:]) # don't know if it's the best answer
     end
 end
 
@@ -35,7 +35,7 @@ function solve(subdomain::Subdomain, f::Array{Complex128,2})
     # u = solve(subdomain::Subdomain, f)
     # function that solves the system Hu=f in the subdomain
     u = solve(subdomain.model, f);
-  
+
 end
 
 function extractBoundaryData(subdomain::Subdomain, u)
