@@ -2,8 +2,10 @@
 # solve the 3D Helmholtz equation
 
 # loading the functions needed to build the system
-include("../src/subdomain.jl");
+include("../src/subdomain2.jl");
 include("../src/preconditioners.jl")
+
+
 using IterativeSolvers
 
 # number of deegres of freedom per dimension
@@ -59,33 +61,44 @@ println("Solving the Helmholtz equation for nx = ",nx,", ny = ",ny, ", nz = ",nz
 
 # defining the full source (point source in this case)
 n = nx*ny*nz;
-f = zeros(nx,ny,nz);
+f = zeros(Complex128,nx,ny,nz);
 # due to a bug the source needs to be in the top layer
 f[8,8,18] = n;
 
 
 # bulding the domain decomposition data structure
-println("Building the subdomains and factorizing the problems locally \n")
-subArray = [Subdomain(m[:,:,(1:nzd)+nzi*(ii-1)],npml,[0 0 z[1+npml+nzi*(ii-1)]],
+println("Building the subdomains")
+modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
 			 h,fac,order,omega) for ii=1:nLayer];
 
+#factorizing the local models 
+println("Factorizing the problems locally \n")
+for ii = 1:nLayer
+  factorize!(modelArray[ii])
+end
+
+subDomains = [Subdomain(modelArray[ii],1) for ii=1:nLayer];
 
 ####################################################################################
 # Solving the local problem
 println("Partitioning the source")
 
 # partitioning the source % TODO make it a function
-ff = sourcePartition(f, nx,ny,nz, npml,nzi,nLayer );
+#ff = sourcePartition(f, nx,ny,nz, npml,nzi,nLayer );
+
+fArray = sourcePartition(subDomains, f[:])
 
 # for loop for solving each system this should be done in parallel
-uArray = [solve(subArray[ii], ff[ii]) for ii=1:nLayer];
+uArray = [solve(subDomains[ii], fArray[ii]) for ii=1:nLayer];
+
+#### WORKS UNTIL HERE!!!
 
 # obdatin all the boundary data here (just be carefull with the first and last components)
 uBdyData = [extractBoundaryData(subArray[ii], uArray[ii]) for ii=1:nLayer  ];
 
 # vectorizing using the polarized construction
 # there is a bug inside this function!!!! 
-uBdyPol = vectorizePolarizedBdyDataRHS(uBdyData);
+uBdyPol = extractRHS(subDomains,f[:]);
 
 ##################################################################################
 #  Solving for the boundary data

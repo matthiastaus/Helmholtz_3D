@@ -1,4 +1,6 @@
-# This class defined the subdomain type
+# Subdomain type
+# the main idea behind is to abstract all the information needed to perform the 
+# method of polarized traces. 
 
 include("HelmholtzMatrix.jl");
 
@@ -174,13 +176,13 @@ function vectorizePolarizedBdyDataRHS(uBdyData)
 
 
     for ii = 1:nLayer-1
-        uBdy1[nInd+(2*ii-1)*nSurf] = uBdyData[ii][3];
-        uBdy1[nInd+(2*ii  )*nSurf] = uBdyData[ii+1][2];
+        uBdy1[nInd+(2*ii-2)*nSurf] = uBdyData[ii][3];
+        uBdy1[nInd+(2*ii-1)*nSurf] = uBdyData[ii+1][2];
     end
 
-    for ii = 1:nLayer-2
-        uBdy0[nInd+(2*ii-1)*nSurf] = uBdyData[ii ][4];
-        uBdy0[nInd+(2*ii)*nSurf] = uBdyData[ii+1][1];
+    for ii = 1:nLayer-1
+        uBdy0[nInd+(2*ii-2)*nSurf] = uBdyData[ii ][4];
+        uBdy0[nInd+(2*ii-1)*nSurf] = uBdyData[ii+1][1];
     end
 
     return vcat(uBdy1,uBdy0)
@@ -346,8 +348,17 @@ function applyMM(subArray, uGammaPol)
 
 end
 
+
+#############################
+#   Optimized functions     #
+#                           #
+#############################
+
 function applyMMOpt(subDomains, uGamma)
-    # function to apply M to uGamma
+    # function to apply M to uGamma in an optimized fashion
+    # we can further optimize this function by feeding multiple right hand sides
+    # however, built-in UMFPACK doesn not allow for multiple RHS then we do not 
+    # perform that operatio
     # input subDomains : an array of subdomains
     #       uGamma   : data on the boundaries in vector form
 
@@ -623,7 +634,7 @@ end
  #to be DONE, in order to have everything nicely encapsulated
 function sourcePartition(f, nx::Int,ny::Int,nz::Int, npml::Int,nzi, nLayer )
     # partitioning the source % TODO make it a function
-    ff = {};
+    ff = [];
     nzd = nzi+2*npml;
     ftem = zeros(nx,ny,nzd);
     ftem[:,:,1:nzd-npml] = f[:,:,1:nzd-npml];
@@ -666,4 +677,3 @@ function generatePermutationMatrix(nx,ny,nLayer )
     P = kron(p, speye(nSurf));
     return P;
 end
-
