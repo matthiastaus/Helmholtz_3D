@@ -9,7 +9,7 @@ include("../src/preconditioners.jl")
 using IterativeSolvers
 
 # number of deegres of freedom per dimension
-nx = 76;
+nx = 40;
 ny = 76;
 nz = 76;
 npml = 8;
@@ -70,10 +70,16 @@ println("Building the subdomains")
 modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
 			 h,fac,order,omega) for ii=1:nLayer];
 
+# using Pardiso
+# modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+#        h,fac,order,omega, solvertype  = "MKLPARDISO") for ii=1:nLayer];
+
+
 #factorizing the local models
 println("Factorizing the problems locally \n")
 for ii = 1:nLayer
   factorize!(modelArray[ii])
+  #convert64_32!(modelArray[ii]) #change the index basis to make MKLPardiso faster
 end
 
 subDomains = [Subdomain(modelArray[ii],1) for ii=1:nLayer];
@@ -96,7 +102,7 @@ Precond = IntegralPreconditioner(subDomains);
 # # solving for the traces
 
 u = 0*uBdyPer;
-@time data = gmres!(u,x->applyMMOptUmf(subDomains,x), uBdyPer, Precond; tol=0.00001);
+@time data = gmres!(u,x->applyMMOpt2(subDomains,x), uBdyPer, Precond; tol=0.00001);
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 
