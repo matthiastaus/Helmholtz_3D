@@ -84,10 +84,17 @@ function factorize!(model::Model)
         # TODO : factorization has to be performed separately
         println("Factorizing the local matrix")
         if model.solvertype == "UMFPACK"
+            # using built-in umfpack
             model.Hinv = lufact(model.H);
         end
 
+        if model.solvertype == "MUMPS"
+            # using mumps from Julia Sparse (this is not distributed)
+            model.Hinv = factorMUMPS(A);
+        end
+
         if model.solvertype == "MKLPARDISO"
+            # using MKLPardiso from Julia Sparse (only shared memory)
             model.Hinv = MKLPardisoSolver();
             set_nprocs(model.Hinv, 16)
             #setting the type of the matrix
@@ -125,7 +132,11 @@ function solve(model::Model, f::Array{Complex128,1})
         if model.solvertype == "UMFPACK"
             u = model.Hinv\f[:];
         end
-        # if the linear solvers is MKL Pardiso
+        # if the linear solver is MUMPS
+        if model.solvertype == "MUMPS"
+            u = applyMUMPS(model.Hinv,f[:]);
+        end
+        # if the linear solver is MKL Pardiso
         if model.solvertype == "MKLPARDISO"
             set_phase(model.Hinv, 33)
             u = zeros(Complex128,length(f))
@@ -148,6 +159,11 @@ function solve(model::Model, f::Array{Complex128,2})
         if model.solvertype == "UMFPACK"
             u = model.Hinv\f;
         end
+        # if the linear solver is MUMPS
+        if model.solvertype == "MUMPS"
+            u = applyMUMPS(model.Hinv,f[:]);
+        end
+
         # if the linear solvers is MKL Pardiso
         if model.solvertype == "MKLPARDISO"
             set_phase(model.Hinv, 33)
