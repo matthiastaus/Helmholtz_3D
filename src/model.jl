@@ -90,7 +90,7 @@ function factorize!(model::Model)
 
         if model.solvertype == "MUMPS"
             # using mumps from Julia Sparse (this is not distributed)
-            model.Hinv = factorMUMPS(A);
+            model.Hinv = factorMUMPS(model.H);
         end
 
         if model.solvertype == "MKLPARDISO"
@@ -161,7 +161,7 @@ function solve(model::Model, f::Array{Complex128,2})
         end
         # if the linear solver is MUMPS
         if model.solvertype == "MUMPS"
-            u = applyMUMPS(model.Hinv,f[:]);
+            u = applyMUMPS(model.Hinv,f);
         end
 
         # if the linear solvers is MKL Pardiso
