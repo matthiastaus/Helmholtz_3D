@@ -253,7 +253,7 @@ function devectorizeBdyDataContiguous(subArray, uGamma)
 
     # obtaining the number of layers
     nLayer = size(subArray)[1];
-    nSurf = length(subArray[1].model.x)*length(subArray[1].model.y);
+    nSurf = subArray[1].model.size[2]*subArray[1].model.size[3];
     nInd = 1:nSurf;
 
     v0  = zeros(Complex128, nSurf*nLayer);
@@ -289,7 +289,7 @@ end
 function vectorizeBdyData(subDomains, uBdyData)
     # function to take the output of extract Boundary data and put it in vectorized form
     nSubs = length(subDomains);
-    n = length(subDomains[1].model.x)*length(subDomains[1].model.y)
+    n = subDomains[1].model.size[2]*subDomains[1].model.size[3]
 
     uBdy = zeros(Complex{Float64},2*(nSubs-1)*n);
     nInd = 1:n;
@@ -892,6 +892,11 @@ function applyMMOptUmf(subDomains, uGamma)
     # u1  = hcat(u1Down[ii], u1Down[ii]+u1Up[ii], u1Down[ii], u1Down[ii]+u1Up[ii])
     # uN  = hcat(uNUp[ii]+uNDown[ii], uNUp[ii], uNUp[ii]+uNDown[ii], uNUp[ii])
     # uNp = hcat(uNpUp[ii]+uNpDown[ii], uNpUp[ii], uNpUp[ii]+uNpDown[ii], uNpUp[ii] )
+    # V = [ applyBlockOperator(subDomains[ii],
+    #         hcat(u0Down[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd]+u0Up[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd], u0Up[(ii-1)*nSurf + nInd]+u0Down[(ii-1)*nSurf + nInd]),
+    #         hcat(u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd]),
+    #         hcat(uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]),
+    #         hcat(uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd] )) for ii = 1:nLayer ];
 
     # only one solve
     V = [ applyBlockOperator(subDomains[ii],
@@ -928,5 +933,73 @@ function applyMMOptUmf(subDomains, uGamma)
     return vcat(Mu1,Mu)
 
 end
+
+# Function for the application of the different blocks of the integral system
+# This is an optimized version that uses only 1 solve per layer instead of 8
+# It feeds multiple right hand sides for each solve. The main idea is to take
+# advantage to BLAS 3 operations. Unfortunately, UMFPACK does not take advantage
+# of the last. However, Pardiso MKL does, in which case we can observe a good
+# speed up.
+function applyMMOpt2(subDomains, uGamma)
+    # function to apply M to uGamma using an application via multiple right-hand sides
+    # input subDomains : an array of subdomains
+    #       uGamma   : data on the boundaries in vector form
+
+    uDown = uGamma[1:round(Integer, end/2)]
+    uUp   = uGamma[1+round(Integer, end/2):end]
+    # convert uGamma in a suitable vector to be applied
+    (u0Down,u1Down,uNDown,uNpDown) = devectorizeBdyDataContiguous(subDomains, uDown);
+    (u0Up  ,u1Up  ,uNUp  ,uNpUp)   = devectorizeBdyDataContiguous(subDomains, uUp);
+
+    # obtaining the number of layers
+    nLayer = size(subDomains)[1];
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
+    nInd = 1:nSurf;
+
+
+    V = [ applyBlockOperator(subDomains[ii],
+            hcat(u0Down[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd]+u0Up[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd], u0Up[(ii-1)*nSurf + nInd]+u0Down[(ii-1)*nSurf + nInd]),
+            hcat(u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd]),
+            hcat(uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]),
+            hcat(uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd] )) for ii = 1:nLayer ];
+
+    # # only one solve
+    # V = [ applyBlockOperator(subDomains[ii],
+    #         hcat(u0Down[ii], u0Down[ii]+u0Up[ii], u0Down[ii], u0Up[ii]+u0Down[ii]),
+    #         hcat(u1Down[ii], u1Down[ii]+u1Up[ii], u1Down[ii], u1Down[ii]+u1Up[ii]),
+    #         hcat(uNUp[ii]+uNDown[ii], uNUp[ii], uNUp[ii]+uNDown[ii], uNUp[ii]),
+    #         hcat(uNpUp[ii]+uNpDown[ii], uNpUp[ii], uNpUp[ii]+uNpDown[ii], uNpUp[ii] )) for ii = 1:nLayer ];
+
+
+    Mu1 = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+    ii = 1;
+    Mu1[nInd] = - uNUp[(ii-1)*nSurf + nInd] - uNDown[(ii-1)*nSurf + nInd] + vec(V[1][3][:,2]);
+
+    for ii=1:nLayer-2
+        Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[(ii)*nSurf + nInd] - u1Down[(ii)*nSurf + nInd] + vec(V[ii+1][2][:,1]);
+        Mu1[nInd + (2*ii  )*nSurf] = - uNUp[(ii)*nSurf + nInd] - uNDown[(ii)*nSurf + nInd] + vec(V[ii+1][3][:,2]);
+    end
+    ii = nLayer-1;
+    Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[(ii)*nSurf + nInd] - u1Down[(ii)*nSurf + nInd] + vec(V[ii+1][2][:,1]) ;
+
+
+    Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+    ii = 1
+    Mu[nInd] =  vec(V[1][4][:,4])- uNpDown[(ii-1)*nSurf + nInd] ;
+
+    for ii=1:nLayer-2
+        Mu[nInd + (2*ii-1)*nSurf] = - u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3]);
+        Mu[nInd + (2*ii  )*nSurf] = - uNpDown[(ii)*nSurf + nInd] + vec(V[ii+1][4][:,4]);
+    end
+    ii = nLayer-1;
+    Mu[nInd + (2*ii-1)*nSurf] = -  u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3])
+
+    return vcat(Mu1,Mu)
+
+end
+
+
 
 
