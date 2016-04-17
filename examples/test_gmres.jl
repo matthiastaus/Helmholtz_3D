@@ -10,7 +10,7 @@ using IterativeSolvers
 
 # number of deegres of freedom per dimension
 nx = 40;
-ny = 40;
+ny = 72;
 nz = 72;
 npml = 6;
 
@@ -18,7 +18,7 @@ npml = 6;
 nLayer = 6;
 
 # interior degrees of freedom
-# for simplicity we suppose that we have the same number of 
+# for simplicity we suppose that we have the same number of
 # degrees of freedom at each layer
 nzi = round(Int,(nz-2*npml)/nLayer);
 # extended deegres of freedom within each layer
@@ -41,7 +41,7 @@ omega = 2*pi*K;       # frequency
 # the squared slowness, we have a constant speed plus some bumps
 m = zeros(Float64, nx,ny,nz);
 
-# we define the model that we will use, in this case it is just a sum of 3 
+# we define the model that we will use, in this case it is just a sum of 3
 # Gaussian bumps
 function bump(x,y,z,center, amplitude)
     return amplitude*( (x-center[1]).^2 + (y-center[2]).^2 + (x-center[3]).^2)
@@ -71,7 +71,7 @@ println("Building the subdomains")
 modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
 			 h,fac,order,omega) for ii=1:nLayer];
 
-#factorizing the local models 
+#factorizing the local models
 println("Factorizing the problems locally \n")
 for ii = 1:nLayer
   factorize!(modelArray[ii])
@@ -86,38 +86,40 @@ println("Partitioning the source")
 # partitioning the source % TODO make it a function
 #ff = sourcePartition(f, nx,ny,nz, npml,nzi,nLayer );
 
-fArray = sourcePartition(subDomains, f[:])
+# fArray = sourcePartition(subDomains, f[:])
 
-# for loop for solving each system this should be done in parallel
-uArray = [solve(subDomains[ii], fArray[ii]) for ii=1:nLayer];
+# # for loop for solving each system this should be done in parallel
+# uArray = [solve(subDomains[ii], fArray[ii]) for ii=1:nLayer];
 
-#### WORKS UNTIL HERE!!!
+# #### WORKS UNTIL HERE!!!
 
-# obdatin all the boundary data here (just be carefull with the first and last components)
-uBdyData = [extractBoundaryData(subArray[ii], uArray[ii]) for ii=1:nLayer  ];
+# # obdatin all the boundary data here (just be carefull with the first and last components)
+# uBdyData = [extractBoundaryData(subDomains[ii], uArray[ii]) for ii=1:nLayer  ];
 
 # vectorizing using the polarized construction
-# there is a bug inside this function!!!! 
+# there is a bug inside this function!!!!
 uBdyPol = extractRHS(subDomains,f[:]);
+
+uBdyRHSPol = vectorizePolarizedBdyData(subDomains, uBdyPol)
 
 ##################################################################################
 #  Solving for the boundary data
 
 # building the Permutation matriz P
-P = generatePermutationMatrix(nx,ny,nLayer );
+P = generatePermutationMatrix(nx*ny,nLayer );
 
 # getting the rhs in the correct form (we need a minus in fron of it)
-uBdyPer = -uBdyPol;
+uBdyPer = -uBdyRHSPol;
 
 # allocating the preconditioner
-Precond = PolarizedTracesPreconditioner(subArray, P)
+Precond = IntegralPreconditioner(subDomains)
 
 ##############  GMRES #####################
 # # solving for the traces
 
-u = 0*uBdyPol;
-data = gmres!(u,x->applyMM(subArray,x), uBdyPer, Precond; tol=0.00001);
-
+u = 0*uBdyPer;
+#data = gmres!(u,x->applyMM(subDomains,x), uBdyPer, Precond; tol=0.00001);
+data = gmres!(u,x->applyMMOpt(subDomains,x), uBdyPer; tol=0.00001);
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 
@@ -125,17 +127,17 @@ println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 # testing the solution
 
 # we apply the polarized matrix to u to check for the error
-MMu = applyMM(subArray, u);
+MMu = applyMMOpt(subDomains, u);
 
-println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer));
+println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer)/norm(uBdyPer) );
 
 # adding the polarized traces to obtain the traces
 # u = u^{\uparrow} + u^{\downarrow}
 uBdySol = u[1:end/2]+u[(1+end/2):end];
 
-uGamma = -vectorizeBdyData(uBdyData);
+uGamma = -vectorizeBdyData(uBdyPol);
 
-Mu = applyM(subArray, uBdySol);
+Mu = applyM(subDomains, uBdySol);
 
 # checking that we recover the good solution
 println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGamma));
@@ -144,9 +146,9 @@ println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGam
 # TODO this needs to be encapsulated too
 
 # using the devectorization routine to use a simple for afterwards
-uBdySolArray = devectorizeBdyData(subArray, uBdySol);
+uBdySolArray = devectorizeBdyData(subDomains, uBdySol);
 
-uSolArray = [reconstructLocally(subArray[ii],ff[ii], uBdySolArray[1][ii],
+uSolArray = [reconstructLocally(subDomains[ii],ff[ii], uBdySolArray[1][ii],
                                 uBdySolArray[2][ii], uBdySolArray[3][ii],
                                 uBdySolArray[4][ii]) for ii = 1:nLayer];
 

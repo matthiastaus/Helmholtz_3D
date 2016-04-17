@@ -1,5 +1,5 @@
 # class model
-# in this type we save all the information related to the physics and discretization at 
+# in this type we save all the information related to the physics and discretization at
 # each layer. In this case we use a simple second order finite difference discretization
 
 include("HelmholtzMatrix.jl");
@@ -29,7 +29,7 @@ type Model
         # extracting the size of the 3D domain
         (nx,ny,nz) = size(m);
         # building the differential operator
-        #TO DO change how the system is built to have pml of different sizes in 
+        #TO DO change how the system is built to have pml of different sizes in
         # every dimension
         H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
         # building the grids in each dimension
@@ -53,7 +53,7 @@ end
 
  # m = matrix(nx,ny,nz)
 function extractBoundaryIndices(localModel::Model);
-  	return (localModel.zLimInd[:,1], localModel.zLimInd[2,:], localModel.zLimInd[:,3], localModel.zLimInd[:,4])
+  	return (localModel.zLimInd[1,:], localModel.zLimInd[2,:], localModel.zLimInd[3,:], localModel.zLimInd[4,:])
 end
 
 # for the following matrices we need more informaiton
@@ -69,7 +69,7 @@ function extractVolIndices(localModel::Model);
  	zIndn = find(abs(localModel.zExt-localModel.zLim[3]).< localModel.h/10)[1]
 
  	return collect((localModel.size[3]*localModel.size[2]*(zInd1-1)+1):(localModel.size[3]*localModel.size[2]*zIndn))
- 
+
 end
 
 function extractVolIntLocalIndices(localModel::Model);
@@ -96,7 +96,7 @@ function factorize!(model::Model)
             set_iparm(model.Hinv,12,2)
             # setting the factoriation phase
             set_phase(model.Hinv, 12)
-            X = zeros(Complex128, model.n*model.m,1)
+            X = zeros(Complex128, model.size[1],1)
             # factorizing the matrix
             pardiso(model.Hinv,X, model.H,X)
             # setting phase and parameters to solve and transposing the matrix
@@ -121,7 +121,7 @@ function solve(model::Model, f::Array{Complex128,1})
     # u = solve(model::Model, f)
     # function that solves the system Hu=f in the model for one RHS
     # check size
-    if (size(f[:])[1] == model.n*model.m)
+    if (size(f[:])[1] == model.size[1])
         if model.solvertype == "UMFPACK"
             u = model.Hinv\f[:];
         end
@@ -144,7 +144,7 @@ function solve(model::Model, f::Array{Complex128,2})
     # function that solves the system Hu=f in the model
     # for multiple RHS simultaneously
     # check size
-    if (size(f)[1] == model.n*model.m)
+    if (size(f)[1] == model.size[1])
         if model.solvertype == "UMFPACK"
             u = model.Hinv\f;
         end

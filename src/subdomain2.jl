@@ -62,15 +62,19 @@ function applyBlockOperator(subdomain::Subdomain,v0::Array{Complex128,1},v1::Arr
     # function to apply the local matricial operator to the interface data
     # and we sample it at the interface
     # allocating the source
-    f = zeros(Complex{Float64},subdomain.n,subdomain.m);
+    f = zeros(Complex{Float64},subdomain.model.size[1])[:];
     # filling the source with the correct single and double layer potentials
     # TO DO: put the correct operators in here (we need to multiply the traces)
     # by the correct weights
     if length(subdomain.ind_1)>0
+        # println("not the top layer")
+        # println(size(v0))
         f[subdomain.ind_1 ] = -subdomain.model.H[subdomain.ind_1,subdomain.ind_0]*v0;
         f[subdomain.ind_0 ] =  subdomain.model.H[subdomain.ind_0,subdomain.ind_1]*v1;
     end
     if length(subdomain.ind_n)>0
+        # println("not the bottom layer")
+        # println(size(vN))
         f[subdomain.ind_np] =  subdomain.model.H[subdomain.ind_np,subdomain.ind_n]*vN;
         f[subdomain.ind_n ] = -subdomain.model.H[subdomain.ind_n,subdomain.ind_np]*vNp;
     end
@@ -92,7 +96,7 @@ function applyBlockOperator(subdomain::Subdomain, v0::Array{Complex128,2},v1::Ar
     # and we sample it at the interface
     nrhs =  size(v0)[2]
     # allocating the source
-    f = zeros(Complex{Float64},subdomain.n*subdomain.m,nrhs);
+    f = zeros(Complex{Float64},subdomain.model.size[1],nrhs);
     # filling the source with the correct single and double layer potentials
     # TO DO: put the correct operators in here (we need to multiply the traces)
     # by the correct weights
@@ -108,7 +112,7 @@ function applyBlockOperator(subdomain::Subdomain, v0::Array{Complex128,2},v1::Ar
     end
     u = solve(subdomain, f);
 
-    U   = reshape(u,subdomain.n*subdomain.m, nrhs)
+    U   = reshape(u,subdomain.model.size[1], nrhs)
     u0  = U[subdomain.ind_0 ,:];
     u1  = U[subdomain.ind_1 ,:];
     uN  = U[subdomain.ind_n ,:];
@@ -164,7 +168,7 @@ function extractFullBoundaryData(subDomains, uLocalArray)
     # partitioning the source % TODO make it a function
     nSubs = length(subDomains);
 
-    n = length(subDomains[1].model.x)*length(subDomains[1].model.y)
+    n = subDomains[1].model.size[2]*subDomains[1].model.size[3];
 
     u_0  = zeros(Complex128,n*nSubs)
     u_1  = zeros(Complex128,n*nSubs)
@@ -400,17 +404,17 @@ end
 
 
 # Function for the application of the different blocks of the integral system
-function applyMup(subDomains, uGamma)
+function applyMup(subDomains, uGamma; verbose = false)
     # function to apply M to uGamma
     # input subDomains : an array of subdomains
     #       uGamma   : data on the boundaries in vector form
-
+    verbose && println("applying M up")
     # convert uGamma in a suitable vector to be applied
     (u0,u1,uN,uNp) = devectorizeBdyData(subDomains, uGamma);
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
     # applying this has to be done in parallel applying RemoteRefs
@@ -432,19 +436,20 @@ function applyMup(subDomains, uGamma)
 
 end
 
-function applyMdown(subDomains, uGamma)
+function applyMdown(subDomains, uGamma; verbose = false)
     # function to apply M to uGamma
     # input subDomains : an array of subdomains
     #       uGamma   : data on the boundaries in vector form
-
+    verbose && println("applying M down")
     # convert uGamma in a suitable vector to be applied
     (u0,u1,uN,uNp) = devectorizeBdyData(subDomains, uGamma);
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
+    verbose && println("applying local solves")
     # applying the local solves (for loop)
     v1 = [ applyBlockOperator(subDomains[ii],u0[ii],u1[ii],  uN[ii],  uNp[ii]) for ii = 1:nLayer ];
     vN = [ applyBlockOperator(subDomains[ii],u0[ii],u1[ii],0*uN[ii],0*uNp[ii]) for ii = 1:nLayer ];
@@ -463,17 +468,18 @@ function applyMdown(subDomains, uGamma)
     return Mu[:]
 end
 
-function applyM0up(subDomains, uGamma)
+function applyM0up(subDomains, uGamma; verbose = false)
     # function to apply M to uGamma
     # input subDomains : an array of subdomains
     #       uGamma   : data on the boundaries in vector form
 
+    verbose && println("applying M0 up")
     # convert uGamma in a suitable vector to be applied
     (u0,u1,uN,uNp) = devectorizeBdyData(subDomains, uGamma);
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
     # applying
@@ -497,17 +503,18 @@ function applyM0up(subDomains, uGamma)
 
 end
 
-function applyM0down(subDomains, uGamma)
+function applyM0down(subDomains, uGamma; verbose = false)
     # function to apply M to uGamma
     # input subDomains : an array of subdomains
     #       uGamma   : data on the boundaries in vector form
 
+    verbose && println("applying M0 down")
     # convert uGamma in a suitable vector to be applied
     (u0,u1,uN,uNp) = devectorizeBdyData(subDomains, uGamma);
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
     # applying the local solves (for loop)
@@ -528,14 +535,14 @@ function applyM0down(subDomains, uGamma)
     return Mu[:]
 end
 
-function applyMM(subDomains, uGammaPol)
+function applyMM(subDomains, uGammaPol; verbose = false)
     # function to apply the the polarized integral operator
-    println("Applying the polarized matrix")
+    verbose && println("Applying the polarized matrix")
     uDown = uGammaPol[1:end/2];
     uUp = uGammaPol[(end/2+1):end];
 
-    MMu = vcat(applyMdown( subDomains, uDown) + applyMup( subDomains, uUp),
-               applyM0down(subDomains, uDown) + applyM0up(subDomains, uUp));
+    MMu = vcat(applyMdown( subDomains, uDown, verbose = verbose) + applyMup( subDomains, uUp, verbose = verbose),
+               applyM0down(subDomains, uDown, verbose = verbose) + applyM0up(subDomains, uUp, verbose = verbose));
     return MMu;
 
 end
@@ -545,7 +552,7 @@ end
 function applyDdown(subDomains, uGamma)
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd    = 1:nSurf;
 
     dummyzero = zeros(Complex{Float64},nSurf);
@@ -573,7 +580,7 @@ end
 function applyDinvDown(subDomains, uGamma)
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd    = 1:nSurf;
 
     dummyzero = zeros(Complex{Float64},nSurf);
@@ -604,7 +611,7 @@ end
 function applyDup(subDomains, uGamma)
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd    = 1:nSurf;
 
     dummyzero = zeros(Complex{Float64},nSurf);
@@ -633,7 +640,7 @@ end
 function applyDinvUp(subDomains, uGamma)
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd    = 1:nSurf;
 
     dummyzero = zeros(Complex{Float64},nSurf);
@@ -672,7 +679,7 @@ function applyU(subDomains, uGamma)
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n;
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3];
     nInd = 1:nSurf;
 
     # applying the local solves (for loop)
@@ -703,7 +710,7 @@ function applyL(subDomains, uGamma)
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n ;
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3] ;
     nInd = 1:nSurf;
 
     # applying the local solves (for loop)
@@ -814,7 +821,7 @@ function applyMMOpt(subDomains, uGamma)
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
     #TODO modify this functio in order to solve the three rhs in one shot
@@ -858,8 +865,11 @@ end
 
 
 # Function for the application of the different blocks of the integral system
-# This is an optimized version that uses only 4 solves per layer instead of 8
-# moreover, it allocates less memory
+# This is an optimized version that uses only 1 solve per layer instead of 8
+# It feeds multiple right hand sides for each solve. The main idea is to take
+# advantage to BLAS 3 operations. Unfortunately, UMFPACK does not take advantage
+# of the last. However, Pardiso MKL does, in which case we can observe a good
+# speed up.
 function applyMMOptUmf(subDomains, uGamma)
     # function to apply M to uGamma using an application via multiple right-hand sides
     # input subDomains : an array of subdomains
@@ -873,7 +883,7 @@ function applyMMOptUmf(subDomains, uGamma)
 
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
-    nSurf = subDomains[1].n
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
     # #TODO modify this functio in order to solve the three rhs in one shot
