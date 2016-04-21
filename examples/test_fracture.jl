@@ -1,23 +1,37 @@
+
+
+
+
+
+
+
 # Script to test the method of polarized traces to
 # solve the 3D Helmholtz equation
-# The wavespeed is a toy fault model 
 
 # loading the functions needed to build the system
-include("../src/subdomain.jl");
+include("../src/subdomain2.jl");
 include("../src/preconditioners.jl")
+
+
 using IterativeSolvers
+
+#options 
+UmfpackBool = true
+MKLPARDISOBool = false
+MUMPSBool = false
 
 # number of deegres of freedom per dimension
 nx = 40;
-ny = 56;
-nz = 56;
+ny = 76;
+nz = 76;
 npml = 8;
 
 # number of layers
-nLayer = 4;
+nLayer = 6;
 
 # interior degrees of freedom
-# for simplicity we suppose that we have the same number of 
+
+# for simplicity we suppose that we have the same number of
 # degrees of freedom at each layer
 nzi = round(Int,(nz-2*npml)/nLayer);
 # extended deegres of freedom within each layer
@@ -31,7 +45,7 @@ zInd = [npml+1+nzi*(ii-1) for ii = 1:nLayer]
 
 # extra arguments
 h     = z[2]-z[1];    # mesh width
-fac   = 30/(npml*h);  # absorbition coefficient for the PML
+fac   = 20/(npml*h);  # absorbition coefficient for the PML
 order = 2;            # order of the method, this should be changes
 K     = nz/6;         # wave number
 omega = 2*pi*K;       # frequency
@@ -218,52 +232,64 @@ println("Solving the Helmholtz equation for nx = ",nx,", ny = ",ny, ", nz = ",nz
 
 # defining the full source (point source in this case)
 n = nx*ny*nz;
-f = zeros(nx,ny,nz);
+f = zeros(Complex128,nx,ny,nz);
 # due to a bug the source needs to be in the top layer
 f[8,8,18] = n;
 
 
 # bulding the domain decomposition data structure
-println("Building the subdomains and factorizing the problems locally \n")
-subArray = [Subdomain(m[:,:,(1:nzd)+nzi*(ii-1)],npml,[0 0 z[1+npml+nzi*(ii-1)]],
-			 h,fac,order,omega) for ii=1:nLayer];
+println("Building the subdomains")
+
+# The data structure is built depending on the local sparse direct solver that was 
+# used 
+if UmfpackBool
+  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+       h,fac,order,omega) for ii=1:nLayer];
+end
+
+if MKLPARDISOBool 
+  # if PARDISO is isntall it will load it
+  using Pardiso
+  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+        h,fac,order,omega, solvertype  = "MKLPARDISO") for ii=1:nLayer];
+end
+
+if MUMPSBool
+  # if MUMPS is installed it will load it 
+  using MUMPS
+  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+       h,fac,order,omega, solvertype = "MUMPS") for ii=1:nLayer];
+end
 
 
-####################################################################################
+#factorizing the local models
+println("Factorizing the problems locally \n")
+for ii = 1:nLayer
+  factorize!(modelArray[ii])
+  MKLPARDISOBool && convert64_32!(modelArray[ii]) #change the index basis to make MKLPardiso faster
+end
+
+subDomains = [Subdomain(modelArray[ii],1) for ii=1:nLayer];
+
+#########################################################################
 # Solving the local problem
-println("Partitioning the source")
+# perform the local solves and extract the traces
+uBdyPol = extractRHS(subDomains,f[:]);
 
-# partitioning the source % TODO make it a function
-ff = sourcePartition(f, nx,ny,nz, npml,nzi,nLayer );
+# We vectorize the RHS, and put in the correct form
+uBdyPer = -vectorizePolarizedBdyDataRHS(subDomains, uBdyPol)
 
-# for loop for solving each system this should be done in parallel
-uArray = [solve(subArray[ii], ff[ii]) for ii=1:nLayer];
-
-# obdatin all the boundary data here (just be carefull with the first and last components)
-uBdyData = [extractBoundaryData(subArray[ii], uArray[ii]) for ii=1:nLayer  ];
-
-# vectorizing using the polarized construction
-# there is a bug inside this function!!!! 
-uBdyPol = vectorizePolarizedBdyDataRHS(uBdyData);
-
-##################################################################################
+##########################################################################
 #  Solving for the boundary data
 
-# building the Permutation matriz P
-P = generatePermutationMatrix(nx,ny,nLayer );
-
-# getting the rhs in the correct form (we need a minus in fron of it)
-uBdyPer = -uBdyPol;
-
 # allocating the preconditioner
-Precond = PolarizedTracesPreconditioner(subArray, P)
+Precond = IntegralPreconditioner(subDomains);
 
 ##############  GMRES #####################
 # # solving for the traces
 
-u = 0*uBdyPol;
-@time data = gmres!(u,x->applyMMOpt(subArray,x), uBdyPer, Precond; tol=0.00001);
-
+u = 0*uBdyPer;
+@time data = gmres!(u,x->applyMMOpt2(subDomains,x), uBdyPer, Precond; tol=0.00001);
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 
@@ -271,17 +297,17 @@ println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 # testing the solution
 
 # we apply the polarized matrix to u to check for the error
-MMu = applyMMOpt(subArray, u);
+@time MMu = applyMMOptUmf(subDomains, u);
 
-println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer));
+println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer)/norm(uBdyPer) );
 
 # adding the polarized traces to obtain the traces
 # u = u^{\uparrow} + u^{\downarrow}
 uBdySol = u[1:round(Integer,end/2)]+u[(1+round(Integer,end/2)):end];
 
-uGamma = -vectorizeBdyData(uBdyData);
+uGamma = -vectorizeBdyData(subDomains, uBdyPol);
 
-Mu = applyM(subArray, uBdySol);
+Mu = applyM(subDomains, uBdySol);
 
 # checking that we recover the good solution
 println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGamma));
@@ -289,27 +315,8 @@ println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGam
 ########### Reconstruction ###############
 # TODO this needs to be encapsulated too
 
-# using the devectorization routine to use a simple for afterwards
-uBdySolArray = devectorizeBdyData(subArray, uBdySol);
 
-uSolArray = [reconstructLocally(subArray[ii],ff[ii], uBdySolArray[1][ii],
-                                uBdySolArray[2][ii], uBdySolArray[3][ii],
-                                uBdySolArray[4][ii]) for ii = 1:nLayer];
+(u0,u1,uN,uNp) = devectorizeBdyDataContiguous(subDomains, uBdySol)
 
-#concatenation fo the solution
-uSol = zeros(Complex{Float64},nx,ny,nz);
-uSol[:,:,1:(nzi+npml)] = reshape(uSolArray[1],nx,ny,nzi+2*npml)[:,:,1:(nzi+npml)];
-
-for ii = 1:nLayer-2
-    uSol[:,:,npml+(1:nzi)+ii*nzi] =  reshape(uSolArray[ii+1],nx,ny,nzi+2*npml)[:,:,npml+(1:nzi)];
-end
-
-ii = nLayer-1;
-uSol[:,:,npml+(1:(nzi+npml))+ii*nzi] =  reshape(uSolArray[ii+1],nx,ny,nzi+2*npml)[:,:,npml+(1:(nzi+npml))];
-
-# # We can build the global operator and test the error
-# print("Assembling the Hemholtz Matrix \n")
-#H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
-
-#norm(H*uSol[:] - f[:])/norm(f[:])
-
+uVol = reconstruction(subDomains, f, u0, u1, uN, uNp)
+# We still need to code the reconstruction that goes here

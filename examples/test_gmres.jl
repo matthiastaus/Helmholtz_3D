@@ -9,9 +9,9 @@ include("../src/preconditioners.jl")
 using IterativeSolvers
 
 #options 
-UmfpackBool = false
+UmfpackBool = true
 MKLPARDISOBool = false
-MUMPSBool = true
+MUMPSBool = false
 
 # number of deegres of freedom per dimension
 nx = 40;
