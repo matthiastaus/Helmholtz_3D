@@ -8,6 +8,11 @@ include("../src/preconditioners.jl")
 
 using IterativeSolvers
 
+#options 
+UmfpackBool = false
+MKLPARDISOBool = false
+MUMPSBool = true
+
 # number of deegres of freedom per dimension
 nx = 40;
 ny = 76;
@@ -67,19 +72,31 @@ f[8,8,18] = n;
 
 # bulding the domain decomposition data structure
 println("Building the subdomains")
-modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+if UmfpackBool
+  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
 			 h,fac,order,omega) for ii=1:nLayer];
+end
 
-# using Pardiso
-# modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-#        h,fac,order,omega, solvertype  = "MKLPARDISO") for ii=1:nLayer];
+if MKLPARDISOBool 
+  # if PARDISO is isntall it will load it
+  using Pardiso
+  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+        h,fac,order,omega, solvertype  = "MKLPARDISO") for ii=1:nLayer];
+end
+
+if MUMPSBool
+  # if MUMPS is installed it will load it 
+  using MUMPS
+  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+       h,fac,order,omega, solvertype = "MUMPS") for ii=1:nLayer];
+end
 
 
 #factorizing the local models
 println("Factorizing the problems locally \n")
 for ii = 1:nLayer
   factorize!(modelArray[ii])
-  #convert64_32!(modelArray[ii]) #change the index basis to make MKLPardiso faster
+  MKLPARDISOBool && convert64_32!(modelArray[ii]) #change the index basis to make MKLPardiso faster
 end
 
 subDomains = [Subdomain(modelArray[ii],1) for ii=1:nLayer];
@@ -110,13 +127,13 @@ println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 # testing the solution
 
 # we apply the polarized matrix to u to check for the error
-MMu = applyMMOptUmf(subDomains, u);
+@time MMu = applyMMOptUmf(subDomains, u);
 
 println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer)/norm(uBdyPer) );
 
 # adding the polarized traces to obtain the traces
 # u = u^{\uparrow} + u^{\downarrow}
-uBdySol = u[1:end/2]+u[(1+end/2):end];
+uBdySol = u[1:round(Integer,end/2)]+u[(1+round(Integer,end/2)):end];
 
 uGamma = -vectorizeBdyData(subDomains, uBdyPol);
 
@@ -127,4 +144,9 @@ println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGam
 
 ########### Reconstruction ###############
 # TODO this needs to be encapsulated too
+
+
+(u0,u1,uN,uNp) = devectorizeBdyData(subDomains, uBdySol)
+
+uVol = reconstruction(subDomains, f, u0, u1, un, unp)
 # We still need to code the reconstruction that goes here
