@@ -189,6 +189,9 @@ function vectorizePolarizedBdyDataRHS(uBdyData)
 end
 
 
+
+
+
 function applyM(subArray, uGamma)
     # function to apply M to uGamma
 
@@ -347,6 +350,62 @@ function applyMM(subArray, uGammaPol)
     return MMu;
 
 end
+
+
+
+function reconstruction(subDomains, source, u0, u1, un, unp)
+    #TODO add description 
+    nSubs = length(subDomains);
+
+    localSizes = zeros(Int64,nSubs)
+    n = subDomains[1].model.size[2]*subDomains[1].model.size[3]
+    # building the local rhs
+    rhsLocal = [ zeros(Complex128,subDomains[ii].model.size[1]) for ii = 1:nSubs ]
+
+    # copying the wave-fields
+    for ii = 1:nSubs
+    
+        rhsLocal[ii][subDomains[ii].indVolIntLocal] = source[subDomains[ii].indVolInt]
+        localSizes[ii] = length(subDomains[ii].indVolIntLocal)
+
+    end
+
+    # obtaining the limit of each subdomain within the global approximated solution
+    localLim = [0; cumsum(localSizes)];
+
+    uPrecond = zeros(Complex128, length(source))
+    index = 1:n
+    for ii = 1:nSubs
+        
+
+        ind_0  = subDomains[ii].ind_0
+        ind_1  = subDomains[ii].ind_1
+        ind_n  = subDomains[ii].ind_n
+        ind_np = subDomains[ii].ind_np
+
+        # making a copy of the parititioned source
+        rhsLocaltemp = copy(rhsLocal[ii]);
+
+        # adding the source at the boundaries
+        if ii!= 1
+            # we need to be carefull at the edges
+            rhsLocaltemp[subDomains[ii].ind_1]  += -subDomains[ii].model.H[ind_1,ind_0]*u0[(ii-1)*n + index]
+            rhsLocaltemp[subDomains[ii].ind_0]  +=  subDomains[ii].model.H[ind_0,ind_1]*u1[(ii-1)*n + index]
+
+        end
+        if ii!= nSubs
+            rhsLocaltemp[subDomains[ii].ind_np] +=  subDomains[ii].model.H[ind_np,ind_n]*un[(ii-1)*n + index]
+            rhsLocaltemp[subDomains[ii].ind_n]  += -subDomains[ii].model.H[ind_n,ind_np]*unp[(ii-1)*n + index]
+        end
+
+
+        uLocal = solve(subDomains[ii],rhsLocaltemp)
+
+        uPrecond[localLim[ii]+1:localLim[ii+1]] = uLocal[subDomains[ii].indVolIntLocal]
+    end
+    return  uPrecond
+end
+
 
 
 #############################
