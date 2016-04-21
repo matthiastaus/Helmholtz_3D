@@ -51,12 +51,13 @@ type Model
 end
 
 
- # m = matrix(nx,ny,nz)
+# we need to ask a model to have the following function defined 
+# TODO: add more comment on what each function does
+
 function extractBoundaryIndices(localModel::Model);
   	return (localModel.zLimInd[1,:], localModel.zLimInd[2,:], localModel.zLimInd[3,:], localModel.zLimInd[4,:])
 end
 
-# for the following matrices we need more informaiton
 function extractVolIntIndices(localModel::Model);
  	zInd1 = find(abs(localModel.zExt-localModel.zLim[2]).< localModel.h/10)[1]
  	zIndn = find(abs(localModel.zExt-localModel.zLim[3]).< localModel.h/10)[1]
@@ -65,7 +66,8 @@ function extractVolIntIndices(localModel::Model);
 end
 
 function extractVolIndices(localModel::Model);
- 	zInd1 = find(abs(localModel.zExt-localModel.zLim[2]).< localModel.h/10)[1]
+ 	
+    zInd1 = find(abs(localModel.zExt-localModel.zLim[2]).< localModel.h/10)[1]
  	zIndn = find(abs(localModel.zExt-localModel.zLim[3]).< localModel.h/10)[1]
 
  	return collect((localModel.size[3]*localModel.size[2]*(zInd1-1)+1):(localModel.size[3]*localModel.size[2]*zIndn))
@@ -81,7 +83,10 @@ end
 
 
 function factorize!(model::Model)
-        # TODO : factorization has to be performed separately
+        # factorize!(model::Model)
+        # function that performs the LU factorization of the matrix H 
+        # within each model. 
+
         println("Factorizing the local matrix")
         if model.solvertype == "UMFPACK"
             # using built-in umfpack
@@ -89,7 +94,7 @@ function factorize!(model::Model)
         end
 
         if model.solvertype == "MUMPS"
-            # using mumps from Julia Sparse (this is not distributed)
+            # using mumps from Julia Sparse (only shared memory)
             model.Hinv = factorMUMPS(model.H);
         end
 
@@ -114,15 +119,17 @@ function factorize!(model::Model)
         end
 end
 
-
-
 function convert64_32!(model::Model)
+    #function to convert from 64 bits to 32 bits
+    # this functions provides makes the call to MKLPardiso 
+    # more efficient, otherwise the conversion is realized at every solve
     if model.solvertype == "MKLPARDISO"
         model.H = SparseMatrixCSC{Complex128,Int32}(model.H)
     else
         println("This method is only to make PARDISO more efficient")
     end
 end
+
 
 function solve(model::Model, f::Array{Complex128,1})
     # u = solve(model::Model, f)
@@ -149,6 +156,7 @@ function solve(model::Model, f::Array{Complex128,1})
         return 0
     end
 end
+
 
 function solve(model::Model, f::Array{Complex128,2})
     # u = solve(model::Model, f)

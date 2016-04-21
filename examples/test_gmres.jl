@@ -72,6 +72,9 @@ f[8,8,18] = n;
 
 # bulding the domain decomposition data structure
 println("Building the subdomains")
+
+# The data structure is built depending on the local sparse direct solver that was 
+# used 
 if UmfpackBool
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
 			 h,fac,order,omega) for ii=1:nLayer];
@@ -146,7 +149,7 @@ println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGam
 # TODO this needs to be encapsulated too
 
 
-(u0,u1,uN,uNp) = devectorizeBdyData(subDomains, uBdySol)
+(u0,u1,uN,uNp) = devectorizeBdyDataContiguous(subDomains, uBdySol)
 
-uVol = reconstruction(subDomains, f, u0, u1, un, unp)
+uVol = reconstruction(subDomains, f, u0, u1, uN, uNp)
 # We still need to code the reconstruction that goes here
