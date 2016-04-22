@@ -71,7 +71,7 @@ n = nx*ny*nz;
 f = zeros(Complex128,nx,ny,nz);
 
 # We place a point source 
-f[8,8,18] = n;
+f[8,8,38] = n;
 
 
 # bulding the domain decomposition data structure
@@ -81,19 +81,21 @@ println("Building the subdomains")
 # used 
 if UmfpackBool==true 
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-			 h,fac,order,omega) for ii=1:nLayer];
+			 h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M") ) for ii=1:nLayer];
 end
 
 if MKLPardisoBool==true 
   # if PARDISO is isntall it will load it
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-        h,fac,order,omega, solvertype  = "MKLPARDISO") for ii=1:nLayer];
+        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"),
+        solvertype  = "MKLPARDISO") for ii=1:nLayer];
 end
 
 if MUMPSBool==true 
   # if MUMPS is installed it will load it 
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-       h,fac,order,omega, solvertype = "MUMPS") for ii=1:nLayer];
+       h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"),
+       solvertype = "MUMPS") for ii=1:nLayer];
 end
 
 
@@ -151,5 +153,5 @@ println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGam
 
 (u0,u1,uN,uNp) = devectorizeBdyDataContiguous(subDomains, uBdySol);
 
-uVol = reconstruction(subDomains, f, u0, u1, uN, uNp);
+uVol = reshape(reconstruction(subDomains, f, u0, u1, uN, uNp), nx, ny, nz);
 

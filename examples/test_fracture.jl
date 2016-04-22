@@ -1,12 +1,5 @@
-
-
-
-
-
-
-
 # Script to test the method of polarized traces to
-# solve the 3D Helmholtz equation
+# solve the 3D Helmholtz equation using a toy fault model
 
 # loading the functions needed to build the system
 include("../src/subdomain2.jl");
@@ -17,9 +10,10 @@ using IterativeSolvers
 
 #options 
 UmfpackBool = true
-MKLPARDISOBool = false
+MKLPardisoBool = false
+# using Pardiso
 MUMPSBool = false
-
+# using MUMPS
 # number of deegres of freedom per dimension
 nx = 40;
 ny = 76;
@@ -242,31 +236,30 @@ println("Building the subdomains")
 
 # The data structure is built depending on the local sparse direct solver that was 
 # used 
-if UmfpackBool
+if UmfpackBool==true 
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-       h,fac,order,omega) for ii=1:nLayer];
+       h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M") ) for ii=1:nLayer];
 end
 
-if MKLPARDISOBool 
+if MKLPardisoBool==true 
   # if PARDISO is isntall it will load it
-  using Pardiso
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-        h,fac,order,omega, solvertype  = "MKLPARDISO") for ii=1:nLayer];
+        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"),
+        solvertype  = "MKLPARDISO") for ii=1:nLayer];
 end
 
-if MUMPSBool
+if MUMPSBool==true 
   # if MUMPS is installed it will load it 
-  using MUMPS
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-       h,fac,order,omega, solvertype = "MUMPS") for ii=1:nLayer];
+       h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"),
+       solvertype = "MUMPS") for ii=1:nLayer];
 end
-
 
 #factorizing the local models
 println("Factorizing the problems locally \n")
 for ii = 1:nLayer
   factorize!(modelArray[ii])
-  MKLPARDISOBool && convert64_32!(modelArray[ii]) #change the index basis to make MKLPardiso faster
+  MKLPardisoBool && convert64_32!(modelArray[ii]) #change the index basis to make MKLPardiso faster
 end
 
 subDomains = [Subdomain(modelArray[ii],1) for ii=1:nLayer];
@@ -313,10 +306,10 @@ Mu = applyM(subDomains, uBdySol);
 println("Error for the boundary integral system = ", norm(Mu - uGamma)/norm(uGamma));
 
 ########### Reconstruction ###############
-# TODO this needs to be encapsulated too
-
 
 (u0,u1,uN,uNp) = devectorizeBdyDataContiguous(subDomains, uBdySol)
 
-uVol = reconstruction(subDomains, f, u0, u1, uN, uNp)
-# We still need to code the reconstruction that goes here
+uVol = reshape(reconstruction(subDomains, f, u0, u1, uN, uNp), nx, ny, nz);
+
+# unfortunately it is hard to provide a good 3D plot using just PyPlot, 
+# to plot it you may want to export to matlab and use slice 

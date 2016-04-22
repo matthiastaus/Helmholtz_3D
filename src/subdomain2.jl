@@ -769,7 +769,6 @@ function reconstruction(subDomains, source, u0, u1, un, unp)
     uPrecond = zeros(Complex128, length(source))
     index = 1:n
     for ii = 1:nSubs
-        
 
         ind_0  = subDomains[ii].ind_0
         ind_1  = subDomains[ii].ind_1

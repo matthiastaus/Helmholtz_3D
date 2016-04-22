@@ -24,7 +24,7 @@ type Model
     Hinv
     size
     solvertype
-    function Model(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64; solvertype = "UMFPACK")
+    function Model(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64, position;  solvertype = "UMFPACK")
         # m = matrix(nx,ny,nz)
         # extracting the size of the 3D domain
         (nx,ny,nz) = size(m);
@@ -39,7 +39,16 @@ type Model
         # building the boundary data
         xLim = [ x[npml] x[npml+1] x[nx-npml] x[nx-npml+1]];
         yLim = [ y[npml] y[npml+1] y[ny-npml] y[ny-npml+1]];
-        zLim = [ z[npml] z[npml+1] z[nz-npml] z[nz-npml+1]];
+        
+        # for the position it will depends where the subdomains is located
+
+        if position=="N"
+            zLim = [ z[1] z[1] z[nz-npml] z[nz-npml+1]];
+        elseif position == "S"
+            zLim = [ z[npml] z[npml+1] z[end] z[end]];
+        else
+            zLim = [ z[npml] z[npml+1] z[nz-npml] z[nz-npml+1]];
+        end
 
         zLimInd= [ (collect(1:nx*ny) + (npml-1)*nx*ny    ).'  ;
                    (collect(1:nx*ny) + (npml)*nx*ny      ).' ;
