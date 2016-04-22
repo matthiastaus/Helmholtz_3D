@@ -24,14 +24,14 @@ type Model
     Hinv
     size
     solvertype
-    function Model(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64, position;  solvertype = "UMFPACK")
+    function Model(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64, position; profileType="quadratic", solvertype = "UMFPACK")
         # m = matrix(nx,ny,nz)
         # extracting the size of the 3D domain
         (nx,ny,nz) = size(m);
         # building the differential operator
         #TO DO change how the system is built to have pml of different sizes in
         # every dimension
-        H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
+        H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega,profileType=profileType);
         # building the grids in each dimension
         x = linspace(bdy[1]-h*(npml), bdy[1]+h*(nx-npml-1), nx );
         y = linspace(bdy[2]-h*(npml), bdy[2]+h*(ny-npml-1), ny );

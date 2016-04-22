@@ -9,19 +9,19 @@ include("../src/preconditioners.jl")
 using IterativeSolvers
 
 #options 
-UmfpackBool = true
+UmfpackBool = false
 MKLPardisoBool = false
 # using Pardiso
 MUMPSBool = false
 # using MUMPS
 # number of deegres of freedom per dimension
 nx = 40;
-ny = 76;
-nz = 76;
-npml = 8;
+ny = 90;
+nz = 90;
+npml = 5;
 
 # number of layers
-nLayer = 6;
+nLayer = 8;
 
 # interior degrees of freedom
 
@@ -230,30 +230,33 @@ f = zeros(Complex128,nx,ny,nz);
 # due to a bug the source needs to be in the top layer
 f[8,8,18] = n;
 
-
 # bulding the domain decomposition data structure
 println("Building the subdomains")
 
 # The data structure is built depending on the local sparse direct solver that was 
 # used 
 if UmfpackBool==true 
+  println("Using Umfpack as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M") ) for ii=1:nLayer];
 end
 
 if MKLPardisoBool==true 
   # if PARDISO is isntall it will load it
+  println("Using MKL Pardiso as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"),
+        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded" ,
         solvertype  = "MKLPARDISO") for ii=1:nLayer];
 end
 
 if MUMPSBool==true 
   # if MUMPS is installed it will load it 
+  println("Using MUMPS as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-       h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"),
+       h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded" ,
        solvertype = "MUMPS") for ii=1:nLayer];
 end
+
 
 #factorizing the local models
 println("Factorizing the problems locally \n")
