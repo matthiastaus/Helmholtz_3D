@@ -745,17 +745,19 @@ function generatePermutationMatrix(n::Int64,nSubs::Int64 )
 end
 
 
-function reconstruction(subDomains, source, u0, u1, un, unp)
 
+function reconstruction(subDomains, source, u0, u1, un, unp)
+    #TODO add description 
     nSubs = length(subDomains);
 
     localSizes = zeros(Int64,nSubs)
-    n = length(subDomains[1].model.x)*length(subDomains[1].model.y)
+    n = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     # building the local rhs
-    rhsLocal = [ zeros(Complex128,subDomains[ii].n*subDomains[ii].m) for ii = 1:nSubs ]
+    rhsLocal = [ zeros(Complex128,subDomains[ii].model.size[1]) for ii = 1:nSubs ]
 
     # copying the wave-fields
     for ii = 1:nSubs
+    
         rhsLocal[ii][subDomains[ii].indVolIntLocal] = source[subDomains[ii].indVolInt]
         localSizes[ii] = length(subDomains[ii].indVolIntLocal)
 
@@ -766,8 +768,8 @@ function reconstruction(subDomains, source, u0, u1, un, unp)
 
     uPrecond = zeros(Complex128, length(source))
     index = 1:n
-
     for ii = 1:nSubs
+        
 
         ind_0  = subDomains[ii].ind_0
         ind_1  = subDomains[ii].ind_1
@@ -780,13 +782,13 @@ function reconstruction(subDomains, source, u0, u1, un, unp)
         # adding the source at the boundaries
         if ii!= 1
             # we need to be carefull at the edges
-            rhsLocaltemp[subDomains[ii].ind_1]  += -subDomains[ii].H[ind_1,ind_0]*u0[(ii-1)*n + index]
-            rhsLocaltemp[subDomains[ii].ind_0]  +=  subDomains[ii].H[ind_0,ind_1]*u1[(ii-1)*n + index]
+            rhsLocaltemp[subDomains[ii].ind_1]  += -subDomains[ii].model.H[ind_1,ind_0]*u0[(ii-1)*n + index]
+            rhsLocaltemp[subDomains[ii].ind_0]  +=  subDomains[ii].model.H[ind_0,ind_1]*u1[(ii-1)*n + index]
 
         end
         if ii!= nSubs
-            rhsLocaltemp[subDomains[ii].ind_np] +=  subDomains[ii].H[ind_np,ind_n]*un[(ii-1)*n + index]
-            rhsLocaltemp[subDomains[ii].ind_n]  += -subDomains[ii].H[ind_n,ind_np]*unp[(ii-1)*n + index]
+            rhsLocaltemp[subDomains[ii].ind_np] +=  subDomains[ii].model.H[ind_np,ind_n]*un[(ii-1)*n + index]
+            rhsLocaltemp[subDomains[ii].ind_n]  += -subDomains[ii].model.H[ind_n,ind_np]*unp[(ii-1)*n + index]
         end
 
 
@@ -796,6 +798,7 @@ function reconstruction(subDomains, source, u0, u1, un, unp)
     end
     return  uPrecond
 end
+
 
 
 #####################################################################

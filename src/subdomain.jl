@@ -340,8 +340,11 @@ function applyM0down(subArray, uGamma)
 end
 
 function applyMM(subArray, uGammaPol)
+    # MMu = applyMM(subArray, uGammaPol)
     # function to apply the the polarized integral operator
+    # by applying every single block
     println("Applying the polarized matrix")
+    
     uDown = uGammaPol[1:round(Int64,end/2)];
     uUp = uGammaPol[(round(Int64,end/2)+1):end];
 
