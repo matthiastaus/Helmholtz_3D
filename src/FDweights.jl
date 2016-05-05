@@ -112,7 +112,7 @@ function stiffness_matrix(nx::Int64, dx::Float64, order::Int64)
    return Dxx
 end
 
-function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; profileType::ASCIIString = "quadratic" , m = 0)
+function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; c = [], profileType::ASCIIString = "quadratic" , m = 0)
   # function (sigmaX, sigmaY, sigmaZ) = DistribPML(nx,ny,nz, nPML,fac)
   # function to create the damping profile on the PML's
   # input :   nx:   number of poinst in the x direction
@@ -132,10 +132,17 @@ function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; pro
     sigmaZ = [fac*sigma(k,nz,nPML)+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
   end
 
+  if profileType ==  "unbounded"
+  # this is a compressed for loop, I don't know if it's vectorized or not
+    sigmaX = [sigmaUnbounded(i,nx,nPML,c[i,j,k])+0*j+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    sigmaY = [sigmaUnbounded(j,ny,nPML,c[i,j,k])+0*i+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    sigmaZ = [sigmaUnbounded(k,nz,nPML,c[i,j,k])+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
+  end
+
   return (sigmaX, sigmaY, sigmaZ)
 end
 
-function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; profileType::ASCIIString = "quadratic", m = 0)
+function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; c = [], profileType::ASCIIString = "quadratic", m = 0)
   # function to create the derivative of the damping profile on the PML's
   # input :   nx:   number of poinst in the x direction
   #           ny:   number of poinst in the y direction
@@ -155,6 +162,12 @@ function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Fl
     DzsigmaZ = [fac*Dxsigma(k,nz,nPML)+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
   end
 
+  if profileType ==  "unbounded"
+    DxsigmaX = [DxsigmaUnbounded(i,nx,nPML,c[i,j,k])+0*j+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    DysigmaY = [DxsigmaUnbounded(j,ny,nPML,c[i,j,k])+0*i+0*k for i=1:nx,j=1:ny,k=1:nz ];
+    DzsigmaZ = [DxsigmaUnbounded(k,nz,nPML,c[i,j,k])+0*i+0*j for i=1:nx,j=1:ny,k=1:nz ];
+  end
+
   return (DxsigmaX, DysigmaY, DzsigmaZ)
 end
 
@@ -164,7 +177,19 @@ function sigma(i::Int64,n::Int64,nPML::Int64)
   res = (i.<nPML).*((i-nPML).^2)/(nPML-1).^2 + (i.> (n-nPML+1)).*((i-n+nPML-1).^2)/(nPML-1).^2;
 end
 
+function sigmaUnbounded(i::Int64,n::Int64,nPML::Int64, c::Float64)
+  # pml function, we start one point after the boundary to enforce the continuity
+  res = (i.<nPML).*(c./abs(i) ) + (i.> (n-nPML+1)).*(c./abs(i-n-1));
+end
+
+
 function Dxsigma(i::Int64,n::Int64,nPML::Int64)
   # derivative of the pml function, we start one point after the boundary to enforce the continuity
   res = -2*(i.<nPML).*((i-nPML))/(nPML-1).^2 + 2*(i.> (n-nPML+1)).*((i-n+nPML-1))/(nPML-1).^2;
+end
+
+
+function DxsigmaUnbounded(i::Int64,n::Int64,nPML::Int64, c::Float64)
+  # derivative of the pml function, we start one point after the boundary to enforce the continuity
+  res =  -(i.<nPML).*(c./abs(i).^2) +(i.> (n-nPML+1)).*(c./abs(i-n-1).^2);
 end

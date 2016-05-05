@@ -5,14 +5,14 @@
 #######################################################################################
 
 type IntegralPreconditioner
-    n::Int64  # number of grid points in the x direction
+    n::Int64  # number of grid points in the plane
     nSubs::Int64
     subDomains
     nIt::Int64
     P # permutation matrix
     precondtype::ASCIIString # preconditioner type Jacobi, GaussSeidel Opt
     function IntegralPreconditioner(subDomains; nIt = 1, precondtype ="GS")
-        n = subDomains[1].n
+        n = subDomains[1].model.size[2]*subDomains[1].model.size[3]
         nSubs = length(subDomains)
         P = generatePermutationMatrix(n,nSubs);
         new(n,nSubs, subDomains,nIt, P, precondtype) # don't know if it's the best answer
