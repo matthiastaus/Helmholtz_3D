@@ -8,7 +8,7 @@ include("../src/preconditioners.jl")
 
 using IterativeSolvers
 
-#options 
+#options
 UmfpackBool = true
 MKLPardisoBool = false
 #using Pardiso
@@ -18,8 +18,11 @@ MUMPSBool = false
 # number of deegres of freedom per dimension
 nx = 40;
 ny = 90;
-nz = 90;
-npml = 5;
+nz = 92;
+npml = 6;
+
+# the number of points have to such
+# (nz - 2*npml)/nLayer is an integer
 
 # number of layers
 nLayer = 8;
@@ -70,22 +73,22 @@ println("Solving the Helmholtz equation for nx = ",nx,", ny = ",ny, ", nz = ",nz
 n = nx*ny*nz;
 f = zeros(Complex128,nx,ny,nz);
 
-# We place a point source 
+# We place a point source
 f[8,8,38] = n;
 
 
 # bulding the domain decomposition data structure
 println("Building the subdomains")
 
-# The data structure is built depending on the local sparse direct solver that was 
-# selected and the profile for the PML, the default is a quadratic Profile 
-if UmfpackBool==true 
+# The data structure is built depending on the local sparse direct solver that was
+# selected and the profile for the PML, the default is a quadratic Profile
+if UmfpackBool==true
   println("Using Umfpack as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M") ) for ii=1:nLayer];
 end
 
-if MKLPardisoBool==true 
+if MKLPardisoBool==true
   # if PARDISO is installed it will load it
   println("Using MKL Pardiso as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
@@ -93,8 +96,8 @@ if MKLPardisoBool==true
         solvertype  = "MKLPARDISO") for ii=1:nLayer];
 end
 
-if MUMPSBool==true 
-  # if MUMPS is installed it will load it 
+if MUMPSBool==true
+  # if MUMPS is installed it will load it
   println("Using MUMPS as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
        h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded" ,

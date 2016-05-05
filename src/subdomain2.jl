@@ -44,7 +44,7 @@ function extractBoundaryData(subdomain::Subdomain, u)
     #         u        : solution
     # output  (u0, u1, uN, uNp) : tuple of the solution at different depth
     # check size
-    if (size(u[:])[1] == subdomain.n*subdomain.m)
+    if (size(u[:])[1] == subdomain.model.size[1])
         u0  = u[subdomain.ind_0];
         u1  = u[subdomain.ind_1];
         uN  = u[subdomain.ind_n];
@@ -747,7 +747,7 @@ end
 
 
 function reconstruction(subDomains, source, u0, u1, un, unp)
-    #TODO add description 
+    #TODO add description
     nSubs = length(subDomains);
 
     localSizes = zeros(Int64,nSubs)
@@ -757,7 +757,7 @@ function reconstruction(subDomains, source, u0, u1, un, unp)
 
     # copying the wave-fields
     for ii = 1:nSubs
-    
+
         rhsLocal[ii][subDomains[ii].indVolIntLocal] = source[subDomains[ii].indVolInt]
         localSizes[ii] = length(subDomains[ii].indVolIntLocal)
 
