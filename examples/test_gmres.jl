@@ -9,11 +9,11 @@ include("../src/preconditioners.jl")
 using IterativeSolvers
 
 #options
-UmfpackBool = false
-MKLPardisoBool = true
+UmfpackBool = true
+MKLPardisoBool = false
 MUMPSBool = false
 
-# loading the different solvers 
+# loading the different solvers
 MKLPardisoBool == true  && using Pardiso
 MUMPSBool == true       && using MUMPS
 
@@ -88,7 +88,7 @@ println("Building the subdomains")
 if UmfpackBool == true
   println("Using Umfpack as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
-        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded") 
+        h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded")
         for ii=1:nLayer];
 end
 
