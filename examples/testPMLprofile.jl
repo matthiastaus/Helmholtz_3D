@@ -1,4 +1,5 @@
 # Script to test the Helmholtz system in 3D using a direct method
+# in this case we use the unbounded PML profile by Bermudez et al. 
 
 # loading the functions needed to build the system
 include("../src/HelmholtzMatrix.jl");
@@ -24,6 +25,7 @@ z = linspace(0,1,nz);
 # the squared slowness, inthis case constant velocity
 m = ones(nx,ny,nz);
 
+
 # extra arguments
 h     = z[2]-z[1];
 fac   = 20/(npml*h);
@@ -33,7 +35,8 @@ omega = 2*pi*K;
 
 # bulding the matrix
 print("Assembling the Hemholtz Matrix \n")
-H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega);
+H = HelmholtzMatrix(m,nx,ny,nz,npml,h,fac,order,omega, profileType="unbounded");
+# factorizing the matrix
 
 # defining the rhs geometrically
 f = zeros(nx,ny,nz);
@@ -76,6 +79,7 @@ if MKLPardisoBool == true
     set_phase(solverMKL, 33)
     @time pardiso(solverMKL, x0, H, bb)
 
+    # reshaping the solution to physical space
     u = reshape( x0, (nx,ny,nz));
 end
 
