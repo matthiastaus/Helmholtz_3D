@@ -35,7 +35,6 @@ function solve(subdomain::Subdomain, f::Array{Complex128,2})
     # u = solve(subdomain::Subdomain, f)
     # function that solves the system Hu=f in the subdomain
     u = solve(subdomain.model, f);
-
 end
 
 function extractBoundaryData(subdomain::Subdomain, u)
@@ -113,6 +112,7 @@ function applyBlockOperator(subdomain::Subdomain, v0::Array{Complex128,2},v1::Ar
     u = solve(subdomain, f);
 
     U   = reshape(u,subdomain.model.size[1], nrhs)
+    # extracting the traces at the boundaries
     u0  = U[subdomain.ind_0 ,:];
     u1  = U[subdomain.ind_1 ,:];
     uN  = U[subdomain.ind_n ,:];
@@ -132,6 +132,7 @@ function solveLocal(subDomains, source::Array{Complex128,1})
     # partition the sources
     sourceArray = sourcePartition(subDomains, source)
 
+    # number of subdomains
     nSubs = length(subDomains);
 
     # Solve all the local problems
@@ -888,19 +889,9 @@ function applyMMOptUmf(subDomains, uGamma)
     nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
-    # #TODO modify this functio in order to solve the three rhs in one shot
-    # # applying this has to be done in parallel applying RemoteRefs
-    # u0  = hcat(u0Down[ii], u0Down[ii]+u0Up[ii], u0Down[ii], u0Up[ii]+u0Down[ii])
-    # u1  = hcat(u1Down[ii], u1Down[ii]+u1Up[ii], u1Down[ii], u1Down[ii]+u1Up[ii])
-    # uN  = hcat(uNUp[ii]+uNDown[ii], uNUp[ii], uNUp[ii]+uNDown[ii], uNUp[ii])
-    # uNp = hcat(uNpUp[ii]+uNpDown[ii], uNpUp[ii], uNpUp[ii]+uNpDown[ii], uNpUp[ii] )
-    # V = [ applyBlockOperator(subDomains[ii],
-    #         hcat(u0Down[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd]+u0Up[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd], u0Up[(ii-1)*nSurf + nInd]+u0Down[(ii-1)*nSurf + nInd]),
-    #         hcat(u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd]),
-    #         hcat(uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]),
-    #         hcat(uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd] )) for ii = 1:nLayer ];
-
-    # only one solve
+    # In this case we use only one solve
+    # but using multiple right-hand sides in order to fully take advantage of the BLAS3
+    # routines in MUMPS and MKLPardiso
     V = [ applyBlockOperator(subDomains[ii],
             hcat(u0Down[ii], u0Down[ii]+u0Up[ii], u0Down[ii], u0Up[ii]+u0Down[ii]),
             hcat(u1Down[ii], u1Down[ii]+u1Up[ii], u1Down[ii], u1Down[ii]+u1Up[ii]),
@@ -938,10 +929,7 @@ end
 
 # Function for the application of the different blocks of the integral system
 # This is an optimized version that uses only 1 solve per layer instead of 8
-# It feeds multiple right hand sides for each solve. The main idea is to take
-# advantage to BLAS 3 operations. Unfortunately, UMFPACK does not take advantage
-# of the last. However, Pardiso MKL does, in which case we can observe a good
-# speed up.
+# it uses a contiguous organization of the data, in order to minimize cache misses
 function applyMMOpt2(subDomains, uGamma)
     # function to apply M to uGamma using an application via multiple right-hand sides
     # input subDomains : an array of subdomains
@@ -958,45 +946,34 @@ function applyMMOpt2(subDomains, uGamma)
     nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
     nInd = 1:nSurf;
 
-
+    # In this case we use only one solve
+    # but using multiple right-hand sides in order to fully take advantage of the BLAS3
+    # routines in MUMPS and MKLPardiso
     V = [ applyBlockOperator(subDomains[ii],
             hcat(u0Down[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd]+u0Up[(ii-1)*nSurf + nInd], u0Down[(ii-1)*nSurf + nInd], u0Up[(ii-1)*nSurf + nInd]+u0Down[(ii-1)*nSurf + nInd]),
             hcat(u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd], u1Down[(ii-1)*nSurf + nInd]+u1Up[(ii-1)*nSurf + nInd]),
             hcat(uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]+uNDown[(ii-1)*nSurf + nInd], uNUp[(ii-1)*nSurf + nInd]),
             hcat(uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd] )) for ii = 1:nLayer ];
 
-    # # only one solve
-    # V = [ applyBlockOperator(subDomains[ii],
-    #         hcat(u0Down[ii], u0Down[ii]+u0Up[ii], u0Down[ii], u0Up[ii]+u0Down[ii]),
-    #         hcat(u1Down[ii], u1Down[ii]+u1Up[ii], u1Down[ii], u1Down[ii]+u1Up[ii]),
-    #         hcat(uNUp[ii]+uNDown[ii], uNUp[ii], uNUp[ii]+uNDown[ii], uNUp[ii]),
-    #         hcat(uNpUp[ii]+uNpDown[ii], uNpUp[ii], uNpUp[ii]+uNpDown[ii], uNpUp[ii] )) for ii = 1:nLayer ];
-
-
+    # We extract the boundary data from V using only one for loop
+    # to minimize cache misses 
     Mu1 = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+    Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
     ii = 1;
     Mu1[nInd] = - uNUp[(ii-1)*nSurf + nInd] - uNDown[(ii-1)*nSurf + nInd] + vec(V[1][3][:,2]);
+    Mu[nInd]  =  vec(V[1][4][:,4])- uNpDown[(ii-1)*nSurf + nInd] ;
 
     for ii=1:nLayer-2
         Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[(ii)*nSurf + nInd] - u1Down[(ii)*nSurf + nInd] + vec(V[ii+1][2][:,1]);
         Mu1[nInd + (2*ii  )*nSurf] = - uNUp[(ii)*nSurf + nInd] - uNDown[(ii)*nSurf + nInd] + vec(V[ii+1][3][:,2]);
-    end
-    ii = nLayer-1;
-    Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[(ii)*nSurf + nInd] - u1Down[(ii)*nSurf + nInd] + vec(V[ii+1][2][:,1]) ;
 
-
-    Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
-
-    ii = 1
-    Mu[nInd] =  vec(V[1][4][:,4])- uNpDown[(ii-1)*nSurf + nInd] ;
-
-    for ii=1:nLayer-2
         Mu[nInd + (2*ii-1)*nSurf] = - u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3]);
         Mu[nInd + (2*ii  )*nSurf] = - uNpDown[(ii)*nSurf + nInd] + vec(V[ii+1][4][:,4]);
     end
     ii = nLayer-1;
-    Mu[nInd + (2*ii-1)*nSurf] = -  u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3])
+    Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[(ii)*nSurf + nInd] - u1Down[(ii)*nSurf + nInd] + vec(V[ii+1][2][:,1]) ;
+    Mu[nInd + (2*ii-1)*nSurf]  = -  u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3])
 
     return vcat(Mu1,Mu)
 

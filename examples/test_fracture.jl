@@ -15,7 +15,7 @@ MUMPSBool = false
 
 # loading the direct solver (if available)
 MKLPardisoBool == true  && using Pardiso
-MUMPSBool == true       &&  using MUMPS
+MUMPSBool == true       && using MUMPS
 
 # number of deegres of freedom per dimension
 nx = 40;
@@ -242,6 +242,7 @@ println("Building the subdomains")
 # The data structure is built depending on the local sparse direct solver that was
 # used
 if UmfpackBool==true
+  # using UMFPACK as a direct solver
   println("Using Umfpack as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
         h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded")
@@ -249,7 +250,7 @@ if UmfpackBool==true
 end
 
 if MKLPardisoBool==true
-  # if PARDISO is isntall it will load it
+  # using MKLPardiso as a direct solver
   println("Using MKL Pardiso as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
         h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded" ,
@@ -257,7 +258,7 @@ if MKLPardisoBool==true
 end
 
 if MUMPSBool==true
-  # if MUMPS is installed it will load it
+  # using MUMPS as a direct solver
   println("Using MUMPS as a sparse direct solver")
   modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
        h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded" ,
@@ -291,7 +292,10 @@ Precond = IntegralPreconditioner(subDomains);
 ##############  GMRES #####################
 # # solving for the traces
 
-u = 0*uBdyPer;
+# allocating the solution
+u = zeros(uBdyPer);
+
+# solving the system using preconditioned GMRES
 @time data = gmres!(u,x->applyMMOpt2(subDomains,x), uBdyPer, Precond; tol=0.00001);
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))

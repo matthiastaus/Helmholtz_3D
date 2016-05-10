@@ -7,10 +7,12 @@ function HelmholtzMatrix(m,nx::Int64,ny::Int64,nz::Int64,npml::Int64,h::Float64,
   #  H = -(\triangle + \omega^2 m I)
   # total number of degrees of freedom
   n = nx*ny*nz;
+
+  # We can use more than one PML profile 
   if profileType == "quadratic"
     (sx,sy,sz)    = DistribPML(nx,ny,nz,npml,fac);
     (dsx,dsy,dsz) = DistribPMLDerivative(nx,ny,nz,npml,fac);
-    (dsx,dsy,dsz) = (dsx/((npml-1)*h),dsy/((npml-1)*h),dsz/((npml-1)*h))  
+    (dsx,dsy,dsz) = (dsx/((npml-1)*h),dsy/((npml-1)*h),dsz/((npml-1)*h));
 
   elseif  profileType == "unbounded"
     c = 1./sqrt(m)

@@ -24,7 +24,12 @@ type Model
     Hinv
     size
     solvertype
-    function Model(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64, position; profileType="quadratic", solvertype = "UMFPACK")
+    function Model(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64,
+                   position; profileType="quadratic", solvertype = "UMFPACK")
+        # function to create a model type
+        # input: m     : a 3D array containing the slowness squared
+        #        npml number of pml points in each direction
+        #        zExt 
         # m = matrix(nx,ny,nz)
         # extracting the size of the 3D domain
         (nx,ny,nz) = size(m);

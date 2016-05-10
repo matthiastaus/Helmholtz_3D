@@ -112,7 +112,8 @@ function stiffness_matrix(nx::Int64, dx::Float64, order::Int64)
    return Dxx
 end
 
-function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; c = [], profileType::ASCIIString = "quadratic" , m = 0)
+function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64;
+                    c = [], profileType::ASCIIString = "quadratic" , m = 0)
   # function (sigmaX, sigmaY, sigmaZ) = DistribPML(nx,ny,nz, nPML,fac)
   # function to create the damping profile on the PML's
   # input :   nx:   number of poinst in the x direction
@@ -142,7 +143,8 @@ function DistribPML(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; c =
   return (sigmaX, sigmaY, sigmaZ)
 end
 
-function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; c = [], profileType::ASCIIString = "quadratic", m = 0)
+function DistribPMLDerivative(nx::Int64,ny::Int64,nz::Int64, nPML::Int64,fac::Float64; 
+                              c = [], profileType::ASCIIString = "quadratic", m = 0)
   # function to create the derivative of the damping profile on the PML's
   # input :   nx:   number of poinst in the x direction
   #           ny:   number of poinst in the y direction
