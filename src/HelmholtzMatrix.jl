@@ -1,4 +1,6 @@
 include("FDweights.jl")
+# TODO implement a 2D version of the matrices
+
 
 function HelmholtzMatrix(m,nx::Int64,ny::Int64,nz::Int64,npml::Int64,h::Float64,
                          fac::Float64,order::Int64,omega; profileType="quadratic")

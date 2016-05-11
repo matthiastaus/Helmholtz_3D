@@ -28,7 +28,7 @@ end
 function solve(subdomain::Subdomain, f::Array{Complex128,1})
     # u = solve(subdomain::Subdomain, f)
     # function that solves the system Hu=f in the subdomain
-    u = solve(subdomain.model, f[:]);
+    u = solve(subdomain.model, f);
 end
 
 function solve(subdomain::Subdomain, f::Array{Complex128,2})
@@ -68,6 +68,9 @@ function applyBlockOperator(subdomain::Subdomain,v0::Array{Complex128,1},v1::Arr
     if length(subdomain.ind_1)>0
         # println("not the top layer")
         # println(size(v0))
+        # TODO: extracting submatrices from a sparse matrix is slow
+        # we need to extract the matrices only once and store them in 
+        # the subdomain
         f[subdomain.ind_1 ] = -subdomain.model.H[subdomain.ind_1,subdomain.ind_0]*v0;
         f[subdomain.ind_0 ] =  subdomain.model.H[subdomain.ind_0,subdomain.ind_1]*v1;
     end
@@ -99,16 +102,15 @@ function applyBlockOperator(subdomain::Subdomain, v0::Array{Complex128,2},v1::Ar
     # filling the source with the correct single and double layer potentials
     # TO DO: put the correct operators in here (we need to multiply the traces)
     # by the correct weights
-    for ii = 1:nrhs
+
         if length(subdomain.ind_1)>0
-            f[subdomain.ind_1,ii ] = -subdomain.model.H[subdomain.ind_1,subdomain.ind_0]*v0[:,ii];
-            f[subdomain.ind_0,ii ] =  subdomain.model.H[subdomain.ind_0,subdomain.ind_1]*v1[:,ii];
+            f[subdomain.ind_1,: ] = -subdomain.model.H[subdomain.ind_1,subdomain.ind_0]*v0;
+            f[subdomain.ind_0,: ] =  subdomain.model.H[subdomain.ind_0,subdomain.ind_1]*v1;
         end
         if length(subdomain.ind_n)>0
-            f[subdomain.ind_np,ii] =  subdomain.model.H[subdomain.ind_np,subdomain.ind_n]*vN[:,ii];
-            f[subdomain.ind_n ,ii] = -subdomain.model.H[subdomain.ind_n,subdomain.ind_np]*vNp[:,ii];
+            f[subdomain.ind_np,:] =  subdomain.model.H[subdomain.ind_np,subdomain.ind_n]*vN;
+            f[subdomain.ind_n ,:] = -subdomain.model.H[subdomain.ind_n,subdomain.ind_np]*vNp;
         end
-    end
     u = solve(subdomain, f);
 
     U   = reshape(u,subdomain.model.size[1], nrhs)
@@ -609,6 +611,52 @@ function applyDinvDown(subDomains, uGamma)
 end
 
 
+function applyDinvDownOpt(subDomains, uGamma)
+    # this function provides with Dinvu and LDinvu simultaneously
+    # obtaining the number of layers
+    nLayer = size(subDomains)[1];
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
+    nInd    = 1:nSurf;
+
+    dummyzero = zeros(Complex{Float64},nSurf);
+    Dinvu     = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+    Dinvu[nInd]        = -uGamma[nInd];
+    Dinvu[nInd+nSurf]  = -uGamma[nInd+nSurf];
+    vN   = Dinvu[nInd] ;
+    vNp  = Dinvu[nInd+nSurf];
+
+    Lu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+    for ii=1:nLayer-2
+        uN = uGamma[nInd+ 2*ii*nSurf];
+        uNp= uGamma[nInd+ (2*ii+1)*nSurf];
+
+        (v0, v1, vNaux, vNpaux) = applyBlockOperator(subDomains[ii+1],vN,vNp, dummyzero,dummyzero);
+
+        Lu[nInd + (2*ii-2)*nSurf]  = vec(v0)           ;
+        Lu[nInd + (2*ii-1 )*nSurf] = vec(v1) - vec(vNp);
+
+        Dinvu[nInd+ 2*ii*nSurf]      = vec(vNaux)  - vec(uN);
+        Dinvu[nInd+ (2*ii+1)*nSurf]  = vec(vNpaux) - vec(uNp);
+
+        # update vN and vNp
+        vN   = Dinvu[nInd+ 2*ii*nSurf] ;
+        vNp  = Dinvu[nInd+ (2*ii+1)*nSurf];
+    end
+
+    ii = nLayer-1;
+
+    (v0, v1, vNaux, vNpaux) = applyBlockOperator(subDomains[ii+1],vN,vNp, dummyzero,dummyzero);
+
+    Lu[nInd + (2*ii-2)*nSurf]  = vec(v0)           ;
+    Lu[nInd + (2*ii-1 )*nSurf] = vec(v1) - vec(vNp);
+
+    return (Dinvu, Lu)
+end
+
+
+
 function applyDup(subDomains, uGamma)
     # obtaining the number of layers
     nLayer = size(subDomains)[1];
@@ -893,10 +941,10 @@ function applyMMOptUmf(subDomains, uGamma)
     # but using multiple right-hand sides in order to fully take advantage of the BLAS3
     # routines in MUMPS and MKLPardiso
     V = [ applyBlockOperator(subDomains[ii],
-            hcat(u0Down[ii], u0Down[ii]+u0Up[ii], u0Down[ii], u0Up[ii]+u0Down[ii]),
-            hcat(u1Down[ii], u1Down[ii]+u1Up[ii], u1Down[ii], u1Down[ii]+u1Up[ii]),
-            hcat(uNUp[ii]+uNDown[ii], uNUp[ii], uNUp[ii]+uNDown[ii], uNUp[ii]),
-            hcat(uNpUp[ii]+uNpDown[ii], uNpUp[ii], uNpUp[ii]+uNpDown[ii], uNpUp[ii] )) for ii = 1:nLayer ];
+            hcat(u0Down[ii]           , u0Down[ii]+u0Up[ii], u0Down[ii]           , u0Up[ii]+u0Down[ii]),
+            hcat(u1Down[ii]           , u1Down[ii]+u1Up[ii], u1Down[ii]           , u1Down[ii]+u1Up[ii]),
+            hcat(uNUp[ii]+uNDown[ii]  , uNUp[ii]           , uNUp[ii]+uNDown[ii]  , uNUp[ii]),
+            hcat(uNpUp[ii]+uNpDown[ii], uNpUp[ii]          , uNpUp[ii]+uNpDown[ii], uNpUp[ii] )) for ii = 1:nLayer ];
 
 
     Mu1 = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
@@ -968,12 +1016,12 @@ function applyMMOpt2(subDomains, uGamma)
         Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[(ii)*nSurf + nInd] - u1Down[(ii)*nSurf + nInd] + vec(V[ii+1][2][:,1]);
         Mu1[nInd + (2*ii  )*nSurf] = - uNUp[(ii)*nSurf + nInd] - uNDown[(ii)*nSurf + nInd] + vec(V[ii+1][3][:,2]);
 
-        Mu[nInd + (2*ii-1)*nSurf] = - u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3]);
+        Mu[nInd + (2*ii-1)*nSurf] = - u0Up[(ii)*nSurf + nInd]    + vec(V[ii+1][1][:,3]);
         Mu[nInd + (2*ii  )*nSurf] = - uNpDown[(ii)*nSurf + nInd] + vec(V[ii+1][4][:,4]);
     end
     ii = nLayer-1;
     Mu1[nInd + (2*ii-1)*nSurf] = - u1Up[(ii)*nSurf + nInd] - u1Down[(ii)*nSurf + nInd] + vec(V[ii+1][2][:,1]) ;
-    Mu[nInd + (2*ii-1)*nSurf]  = -  u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3])
+    Mu[nInd  + (2*ii-1)*nSurf] = - u0Up[(ii)*nSurf + nInd] + vec(V[ii+1][1][:,3])
 
     return vcat(Mu1,Mu)
 

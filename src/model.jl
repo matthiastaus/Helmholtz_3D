@@ -4,6 +4,8 @@
 
 include("HelmholtzMatrix.jl");
 
+# TODO: implement a 2D version of the model
+# TODO: implement a version for higher order discretizations (using Finite differences)
 
 type Model
     H::SparseMatrixCSC{Complex{Float64},Int64} # sparse matrix
@@ -134,7 +136,7 @@ function factorize!(model::Model)
 end
 
 function convert64_32!(model::Model)
-    #function to convert from 64 bits to 32 bits
+    # function to convert the indexing type of an CSC array from 64 bits to 32 bits
     # this functions provides makes the call to MKLPardiso 
     # more efficient, otherwise the conversion is realized at every solve
     if model.solvertype == "MKLPARDISO"
