@@ -14,6 +14,10 @@ type Subdomain
     indVolInt::Array{Int64,1}
     indVol::Array{Int64,1}
     indVolIntLocal::Array{Int64,1}
+    H0_1::SparseMatrixCSC{Complex{Float64},Int64}
+    H1_0::SparseMatrixCSC{Complex{Float64},Int64}
+    Hnp_n::SparseMatrixCSC{Complex{Float64},Int64}
+    Hn_np::SparseMatrixCSC{Complex{Float64},Int64}
 
     function Subdomain(model::Model, dummy)
         # m = matrix(nx,ny,nz)
@@ -21,7 +25,19 @@ type Subdomain
         indVolInt = extractVolIntIndices(model);
         indVol    = extractVolIndices(model);
         indVolIntLocal = extractVolIntLocalIndices(model);
-        new(model, ind_0[:], ind_1[:], ind_n[:], ind_np[:], indVolInt[:], indVol[:], indVolIntLocal[:]) # don't know if it's the best answer
+
+        if length(ind_1[:])>0
+            H1_0 =  model.H[ind_1[:],ind_0[:]];
+            H0_1 =  model.H[ind_0[:],ind_1[:]];
+        end
+        if length(ind_n[:])>0
+            # println("not the bottom layer")
+            # println(size(vN))
+            Hnp_n =  model.H[ind_np[:],ind_n[:]];
+            Hn_np =  model.H[ind_n[:],ind_np[:]];
+        end
+        new(model, ind_0[:], ind_1[:], ind_n[:], ind_np[:], indVolInt[:], indVol[:], indVolIntLocal[:],
+        H0_1, H1_0, Hnp_n, Hn_np) # don't know if it's the best answer
     end
 end
 
@@ -61,7 +77,7 @@ function applyBlockOperator(subdomain::Subdomain,v0::Array{Complex128,1},v1::Arr
     # function to apply the local matricial operator to the interface data
     # and we sample it at the interface
     # allocating the source
-    f = zeros(Complex{Float64},subdomain.model.size[1])[:];
+    f = zeros(Complex{Float64},subdomain.model.size[1]);
     # filling the source with the correct single and double layer potentials
     # TO DO: put the correct operators in here (we need to multiply the traces)
     # by the correct weights
@@ -69,19 +85,19 @@ function applyBlockOperator(subdomain::Subdomain,v0::Array{Complex128,1},v1::Arr
         # println("not the top layer")
         # println(size(v0))
         # TODO: extracting submatrices from a sparse matrix is slow
-        # we need to extract the matrices only once and store them in 
+        # we need to extract the matrices only once and store them in
         # the subdomain
-        f[subdomain.ind_1 ] = -subdomain.model.H[subdomain.ind_1,subdomain.ind_0]*v0;
-        f[subdomain.ind_0 ] =  subdomain.model.H[subdomain.ind_0,subdomain.ind_1]*v1;
+        f[subdomain.ind_1 ] = -subdomain.H1_0*v0;
+        f[subdomain.ind_0 ] =  subdomain.H0_1*v1;
     end
     if length(subdomain.ind_n)>0
         # println("not the bottom layer")
         # println(size(vN))
-        f[subdomain.ind_np] =  subdomain.model.H[subdomain.ind_np,subdomain.ind_n]*vN;
-        f[subdomain.ind_n ] = -subdomain.model.H[subdomain.ind_n,subdomain.ind_np]*vNp;
+        f[subdomain.ind_np] =  subdomain.Hnp_n*vN;
+        f[subdomain.ind_n ] = -subdomain.Hn_np*vNp;
     end
 
-    u = solve(subdomain, f[:]);
+    u = solve(subdomain, f);
 
     u0  = u[subdomain.ind_0 ];
     u1  = u[subdomain.ind_1 ];
@@ -103,14 +119,20 @@ function applyBlockOperator(subdomain::Subdomain, v0::Array{Complex128,2},v1::Ar
     # TO DO: put the correct operators in here (we need to multiply the traces)
     # by the correct weights
 
-        if length(subdomain.ind_1)>0
-            f[subdomain.ind_1,: ] = -subdomain.model.H[subdomain.ind_1,subdomain.ind_0]*v0;
-            f[subdomain.ind_0,: ] =  subdomain.model.H[subdomain.ind_0,subdomain.ind_1]*v1;
-        end
-        if length(subdomain.ind_n)>0
-            f[subdomain.ind_np,:] =  subdomain.model.H[subdomain.ind_np,subdomain.ind_n]*vN;
-            f[subdomain.ind_n ,:] = -subdomain.model.H[subdomain.ind_n,subdomain.ind_np]*vNp;
-        end
+    if length(subdomain.ind_1)>0
+        # println("not the top layer")
+        # println(size(v0))
+        # TODO: use sparse BLAS3
+        f[subdomain.ind_1,: ] = -subdomain.H1_0*v0;
+        f[subdomain.ind_0,: ] =  subdomain.H0_1*v1;
+    end
+    if length(subdomain.ind_n)>0
+        # println("not the bottom layer")
+        # TODO: use sparse BLAS3
+        f[subdomain.ind_np,:] =  subdomain.Hnp_n*vN;
+        f[subdomain.ind_n,: ] = -subdomain.Hn_np*vNp;
+    end
+
     u = solve(subdomain, f);
 
     U   = reshape(u,subdomain.model.size[1], nrhs)
@@ -718,6 +740,56 @@ function applyDinvUp(subDomains, uGamma)
 end
 
 
+### TODO
+function applyDinvUpOpt(subDomains, uGamma)
+    # function to apply the DupInv but obtaining
+    # Uu at the same time for the same cost
+    # This would represent pair-wise reflections so it should
+    # increase the speed of the convergence
+    # obtaining the number of layers
+    nLayer = size(subDomains)[1];
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
+    nInd    = 1:nSurf;
+
+    dummyzero = zeros(Complex{Float64},nSurf);
+    Dinvu     = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+    Uu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+
+    jj = nLayer-1
+    Dinvu[nInd+ (2*jj-2)*nSurf]  = -uGamma[nInd+ (2*jj-2)*nSurf];
+    Dinvu[nInd+ (2*jj-1)*nSurf]  = -uGamma[nInd+ (2*jj-1)*nSurf];
+    v0  = Dinvu[nInd+ (2*jj-2)*nSurf] ;
+    v1  = Dinvu[nInd+ (2*jj-1)*nSurf];
+
+    (v0aux, v1aux, vN, vNp) = applyBlockOperator(subDomains[ii+1],dummyzero,dummyzero,v0,v1);
+
+    Uu[nInd + (2*jj-2)*nSurf]  = vec(vN) - vec(v0);
+    Uu[nInd + (2*jj-1)*nSurf]  = vec(vNp)  ;
+
+    for ii = nLayer-2:-1:1
+        u0 = uGamma[nInd+ (2*ii-2)*nSurf];
+        u1 = uGamma[nInd+ (2*ii-1)*nSurf];
+
+        (v0aux, v1aux, vN, vNp) = applyBlockOperator(subDomains[ii+1],dummyzero,dummyzero,v0,v1);
+
+        Dinvu[nInd+ (2*ii-2)*nSurf]  = vec(v0aux) - vec(u0);
+        Dinvu[nInd+ (2*ii-1)*nSurf]  = vec(v1aux) - vec(u1);
+
+        Uu[nInd + (2*ii-2)*nSurf] = vec(vN) - v0;
+        Uu[nInd + (2*ii-1)*nSurf] = vec(vNp) ;
+
+        v0  = Dinvu[nInd+ (2*ii-2)*nSurf] ;
+        v1  = Dinvu[nInd+ (2*ii-1)*nSurf];
+    end
+
+
+
+    return (Dinvu, Uu)
+end
+
+
+
 function applyU(subDomains, uGamma)
     # function to apply M to uGamma
     # input subDomains : an array of subdomains
@@ -1004,7 +1076,7 @@ function applyMMOpt2(subDomains, uGamma)
             hcat(uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd]+uNpDown[(ii-1)*nSurf + nInd], uNpUp[(ii-1)*nSurf + nInd] )) for ii = 1:nLayer ];
 
     # We extract the boundary data from V using only one for loop
-    # to minimize cache misses 
+    # to minimize cache misses
     Mu1 = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
     Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
