@@ -9,7 +9,7 @@ include("../src/preconditioners.jl")
 using IterativeSolvers
 
 # options for the direct solver used within each layer
-# Umfpack will be the slowest, and it is only for 
+# Umfpack will be the slowest, and it is only for
 # testing porpouses. You may want to install MUMPS
 # or if you have a MKL license, use MKLPardiso
 UmfpackBool    = true
@@ -20,8 +20,8 @@ MUMPSBool      = false
 MKLPardisoBool == true  && using Pardiso
 MUMPSBool == true       && using MUMPS
 
-# using some extra optimization to reduce the 
-# execution time 
+# using some extra optimization to reduce the
+# execution time
 OptBool = false
 
 # number of deegres of freedom per dimension
@@ -134,12 +134,12 @@ uBdyPer = -vectorizePolarizedBdyDataRHS(subDomains, uBdyPol)
 ##########################################################################
 #  Solving for the boundary data
 
-# allocating the preconditioner 
+# allocating the preconditioner
 if OptBool == false
   # by default we use the Gauss-Seidel Preconditioner
   Precond = IntegralPreconditioner(subDomains);
 else
-  # we can use the optimized Gauss-Seidel that uses the 
+  # we can use the optimized Gauss-Seidel that uses the
   # jump conditiones to perform one less local solve per layer
   Precond = IntegralPreconditioner(subDomains,precondtype ="GSOpt");
 end
@@ -148,11 +148,8 @@ end
 # # solving for the traces
 
 u = 0*uBdyPer;
-if OptBool == false
-  @time data = gmres!(u,x->applyMMOptUmf(subDomains,x), uBdyPer, Precond; tol=0.00001);
-else
-  @time data = gmres!(u,x->applyMMOptUmf(subDomains,x), uBdyPer, Precond; tol=0.00001);
-end
+
+@time data = gmres!(u,x->applyMMOptUmf(subDomains,x), uBdyPer, Precond; tol=0.00001);
 
 println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 

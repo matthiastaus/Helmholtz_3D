@@ -100,9 +100,9 @@ end
 
 function PrecondGaussSeidelOpt(subArray, v::Array{Complex128,1}, nit; verbose=false)
     # function to apply the block Gauss-Seidel Preconditioner
-    # in this case we use the jump conditions to eliminate one local 
-    # solve in order to accelerate the execution time 
-    # Now we have only 2 local solves per layer per application of the 
+    # in this case we use the jump conditions to eliminate one local
+    # solve in order to accelerate the execution time
+    # Now we have only 2 local solves per layer per application of the
     # preconditioner
     # input :   subArray  array pointer to the set of subdomains
     #           v         rhs to be solved
@@ -127,8 +127,8 @@ function PrecondGaussSeidelOpt(subArray, v::Array{Complex128,1}, nit; verbose=fa
         uupaux   = v[(1+round(Integer,end/2)):end] ;
 
         # applying the inverses
-        (vdown Lvdown) = applyDinvDownOpt(subArray,udownaux);
-        vup   = applyDinvUp(subArray, uupaux - Lvdown);
+        (vdown, udownaux) = applyDinvDownOpt(subArray,udownaux);
+        vup               = applyDinvUp(subArray, uupaux - udownaux);
 
         if verbose
             println("magnitude of the update = ", norm(u[:] -  vcat(vdown, vup ))/norm(v[:]));
