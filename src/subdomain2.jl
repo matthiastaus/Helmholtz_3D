@@ -753,19 +753,16 @@ function applyDinvUpOpt(subDomains, uGamma)
 
     dummyzero = zeros(Complex{Float64},nSurf);
     Dinvu     = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
     Uu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
 
-    jj = nLayer-1
-    Dinvu[nInd+ (2*jj-2)*nSurf]  = -uGamma[nInd+ (2*jj-2)*nSurf];
-    Dinvu[nInd+ (2*jj-1)*nSurf]  = -uGamma[nInd+ (2*jj-1)*nSurf];
-    v0  = Dinvu[nInd+ (2*jj-2)*nSurf] ;
-    v1  = Dinvu[nInd+ (2*jj-1)*nSurf];
-
-    (v0aux, v1aux, vN, vNp) = applyBlockOperator(subDomains[ii+1],dummyzero,dummyzero,v0,v1);
-
-    Uu[nInd + (2*jj-2)*nSurf]  = vec(vN) - vec(v0);
-    Uu[nInd + (2*jj-1)*nSurf]  = vec(vNp)  ;
+    # last layer
+    ii = nLayer-1
+    Dinvu[nInd+ (2*ii-2)*nSurf]  = -uGamma[nInd+ (2*ii-2)*nSurf];
+    Dinvu[nInd+ (2*ii-1)*nSurf]  = -uGamma[nInd+ (2*ii-1)*nSurf];
+    v0  = Dinvu[nInd+ (2*ii-2)*nSurf];
+    v1  = Dinvu[nInd+ (2*ii-1)*nSurf];
 
     for ii = nLayer-2:-1:1
         u0 = uGamma[nInd+ (2*ii-2)*nSurf];
@@ -776,13 +773,19 @@ function applyDinvUpOpt(subDomains, uGamma)
         Dinvu[nInd+ (2*ii-2)*nSurf]  = vec(v0aux) - vec(u0);
         Dinvu[nInd+ (2*ii-1)*nSurf]  = vec(v1aux) - vec(u1);
 
-        Uu[nInd + (2*ii-2)*nSurf] = vec(vN) - v0;
-        Uu[nInd + (2*ii-1)*nSurf] = vec(vNp) ;
+        Uu[nInd + (2*ii)*nSurf]   = vec(vN) - vec(v0);
+        Uu[nInd + (2*ii+1)*nSurf] = vec(vNp) ;
 
         v0  = Dinvu[nInd+ (2*ii-2)*nSurf] ;
         v1  = Dinvu[nInd+ (2*ii-1)*nSurf];
     end
 
+    ii = 0
+
+    (v0aux, v1aux, vN, vNp) = applyBlockOperator(subDomains[ii+1],dummyzero,dummyzero,v0,v1);
+
+    Uu[nInd + (2*ii)*nSurf]    = vec(vN) - vec(v0);
+    Uu[nInd + (2*ii+1)*nSurf]  = vec(vNp)  ;
 
 
     return (Dinvu, Uu)

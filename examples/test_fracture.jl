@@ -17,6 +17,11 @@ MUMPSBool = false
 MKLPardisoBool == true  && using Pardiso
 MUMPSBool == true       && using MUMPS
 
+# using some extra optimization to reduce the
+# execution time
+OptBool = false
+
+
 # number of deegres of freedom per dimension
 nx = 40;
 ny = 90;
@@ -287,7 +292,15 @@ uBdyPer = -vectorizePolarizedBdyDataRHS(subDomains, uBdyPol)
 #  Solving for the boundary data
 
 # allocating the preconditioner
-Precond = IntegralPreconditioner(subDomains);
+if OptBool == false
+  # by default we use the Gauss-Seidel Preconditioner
+  Precond = IntegralPreconditioner(subDomains);
+else
+  # we can use the optimized Gauss-Seidel that uses the
+  # jump conditiones to perform one less local solve per layer
+  Precond = IntegralPreconditioner(subDomains,precondtype ="GSOpt2");
+end
+
 
 ##############  GMRES #####################
 # # solving for the traces
