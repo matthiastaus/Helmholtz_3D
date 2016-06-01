@@ -7,7 +7,10 @@ include("HelmholtzMatrix.jl");
 # TODO: implement a 2D version of the model
 # TODO: implement a version for higher order discretizations (using Finite differences)
 
-type Model
+
+abstract Model
+
+type ModelFD3D <: Model
     H::SparseMatrixCSC{Complex{Float64},Int64} # sparse matrix
     # local meshes
     h::Float64
@@ -26,7 +29,7 @@ type Model
     Hinv
     size
     solvertype
-    function Model(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64,
+    function ModelFD3D(m::Array{Float64,3},npml::Int64,zExt, bdy,h::Float64,fac::Float64,order::Int64,omega::Float64,
                    position; profileType="quadratic", solvertype = "UMFPACK")
         # function to create a model type
         # input: m     : a 3D array containing the slowness squared

@@ -249,7 +249,7 @@ println("Building the subdomains")
 if UmfpackBool==true
   # using UMFPACK as a direct solver
   println("Using Umfpack as a sparse direct solver")
-  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+  modelArray = [ModelFD3D(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
         h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded")
         for ii=1:nLayer];
 end
@@ -257,7 +257,7 @@ end
 if MKLPardisoBool==true
   # using MKLPardiso as a direct solver
   println("Using MKL Pardiso as a sparse direct solver")
-  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+  modelArray = [ModelFD3D(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
         h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded" ,
         solvertype  = "MKLPARDISO") for ii=1:nLayer];
 end
@@ -265,7 +265,7 @@ end
 if MUMPSBool==true
   # using MUMPS as a direct solver
   println("Using MUMPS as a sparse direct solver")
-  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+  modelArray = [ModelFD3D(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
        h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded" ,
        solvertype = "MUMPS") for ii=1:nLayer];
 end

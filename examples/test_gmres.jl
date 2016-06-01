@@ -12,8 +12,8 @@ using IterativeSolvers
 # Umfpack will be the slowest, and it is only for
 # testing porpouses. You may want to install MUMPS
 # or if you have a MKL license, use MKLPardiso
-UmfpackBool    = true
-MKLPardisoBool = false
+UmfpackBool    = false
+MKLPardisoBool = true
 MUMPSBool      = false
 
 # loading the different solvers
@@ -93,7 +93,7 @@ println("Building the subdomains")
 # selected and the profile for the PML, the default is a quadratic Profile
 if UmfpackBool == true
   println("Using Umfpack as a sparse direct solver")
-  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+  modelArray = [ModelFD3D(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
         h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded")
         for ii=1:nLayer];
 end
@@ -101,7 +101,7 @@ end
 if MKLPardisoBool == true
   # if PARDISO is installed it will load it
   println("Using MKL Pardiso as a sparse direct solver")
-  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+  modelArray = [ModelFD3D(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
         h,fac,order,omega, (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded",
         solvertype  = "MKLPARDISO") for ii=1:nLayer];
 end
@@ -109,7 +109,7 @@ end
 if MUMPSBool == true
   # if MUMPS is installed it will load it
   println("Using MUMPS as a sparse direct solver")
-  modelArray = [Model(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
+  modelArray = [ModelFD3D(m[:,:,(1:nzd)+nzi*(ii-1)], npml,collect(z),[0 0 z[1+npml+nzi*(ii-1)]],
        h,fac,order,omega,  (ii == 1)? "N": ((ii == nLayer)? "S": "M"), profileType="unbounded",
        solvertype = "MUMPS") for ii=1:nLayer];
 end
