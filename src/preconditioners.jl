@@ -158,7 +158,7 @@ function PrecondGaussSeidelOpt2(subArray, v::Array{Complex128,1}, nit; verbose=f
 
     println("Applying the preconditioner Gauss-Seidel Optimized 2");
     u = 0*v;
-    # the for loops are not leaky need to define this outisde
+    # the for loops are not leaky then we need to define the wavefields outisde
     vdown = 0*v;
     udownaux = 0*v;
     vup = 0*v ;
@@ -207,7 +207,10 @@ type IntegralPreconditionerDDM
     precondtype::ASCIIString # preconditioner type Jacobi, GaussSeidel Opt
     function IntegralPreconditionerDDM(DDM::DomainDecomposition; nIt = 1, precondtype ="GSOpt2")
         nSubs = length(DDM.subDomains)
-        # we need to fix the permutation matrix 
+        # TODO this needs to be modified in order to allow for different
+        n = DDM.LimsN[1,2];
+        # we need to fix the permutation matrix, this is going to be completely different if the
+        # sizes of the interface data are different
         P = generatePermutationMatrix(n,nSubs);
         new(nSubs, DDM,nIt, P, precondtype) # don't know if it's the best answer
     end
@@ -266,8 +269,8 @@ function PrecondGaussSeidelOpt2DDM(DDM::DomainDecomposition, v::Array{Complex128
         uupaux   = v[(1+round(Integer,end/2)):end] ;
 
         # applying the inverses
-        (vdown, udownaux) = applyDinvDownOpt(DDM,udownaux);
-        (vup  , udownaux) = applyDinvUpOpt(DDM, uupaux - udownaux);
+        (vdown, udownaux) = applyDinvDownOptDDM(DDM,udownaux);
+        (vup  , udownaux) = applyDinvUpOptDDM(DDM, uupaux - udownaux);
 
 
         if verbose

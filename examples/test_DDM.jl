@@ -1,7 +1,7 @@
 # Script to test the method of polarized traces to
 # solve the 3D Helmholtz equation
 # In this case this script is to test that the DDM
-# encapsulation works as it should 
+# encapsulation works as it should
 
 # loading the functions needed to build the system
 include("../src/subdomain2.jl");
@@ -137,6 +137,9 @@ DDM = DomainDecomposition(subDomains,1)
 # perform the local solves and extract the traces
 uBdyPol = extractRHS(subDomains,f[:]);
 
+uBdyPolDDM = extractRHS(DDM,f[:]);
+
+
 # We vectorize the RHS, and put in the correct form
 uBdyPer = -vectorizePolarizedBdyDataRHS(subDomains, uBdyPol)
 
@@ -160,7 +163,20 @@ u = 0*uBdyPer;
 
 @time data = gmres!(u,x->applyMMOptUmf(subDomains,x), uBdyPer, Precond; tol=0.00001);
 
-println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
+println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]));
+
+##############  GMRES #####################
+# # solving for the traces using the DDM encapsulation
+
+PrecondDDM = IntegralPreconditionerDDM(DDM);
+
+
+uDDM = 0*uBdyPer;
+
+@time data = gmres!(uDDM,x->applyMMOptMultDMM(DDM,x), uBdyPer, PrecondDDM; tol=0.00001);
+
+println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]));
+
 
 #########################################################################
 # testing the solution
@@ -168,7 +184,14 @@ println("Number of iteration of GMRES : ", countnz( data[2].residuals[:]))
 # we apply the polarized matrix to u to check for the error
 @time MMu = applyMMOptUmf(subDomains, u);
 
+@time MMuDDM = applyMMOptMultDMM(DDM, uDDM);
+
+println("Error in the application of the integral operator is  = ", norm(MMu - MMuDDM) );
+
 println("Error for the polarized boundary integral system = ", norm(MMu - uBdyPer)/norm(uBdyPer) );
+println("Error for the polarized boundary integral system using DDM encapsulation = ", norm(MMuDDM - uBdyPer)/norm(uBdyPer) );
+
+
 
 # adding the polarized traces to obtain the traces
 # u = u^{\uparrow} + u^{\downarrow}

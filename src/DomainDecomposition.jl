@@ -200,7 +200,7 @@ end
 
 
 ### TODO
-function applyDinvUpOpt(DDM::DomainDecomposition, uGamma)
+function applyDinvUpOptDDM(DDM::DomainDecomposition, uGamma)
     # function to apply the DupInv but obtaining
     # Uu at the same time for the same cost
     # This would represent pair-wise reflections so it should
@@ -252,3 +252,91 @@ function applyDinvUpOpt(DDM::DomainDecomposition, uGamma)
 
     return (Dinvu, Uu)
 end
+
+function extractRHS(DDM::DomainDecomposition,source::Array{Complex128,1})
+    #function to produce and extra the rhs
+
+    uLocalArray = solveLocal(DDM.subDomains, source)
+
+    return extractFullBoundaryData(DDM, uLocalArray)
+end
+
+# to be redone
+
+function extractFullBoundaryData(DDM::DomainDecomposition, uLocalArray)
+    # Function to extract the boundary data from an array of local solutions
+    # input   SubArray: subdomain associated to the solution
+    #         u        : solution
+    # output  (u0, u1, uN, uNp) : tuple of the solution at different depth
+    # check size
+
+    # partitioning the source % TODO make it a function
+    nSubs = length(DDM.subDomains);
+
+    n = DDM.Lims1[end,2];
+
+    u_0  = zeros(Complex128,round(Integer,n/2))
+    u_1  = zeros(Complex128,round(Integer,n/2))
+    u_n  = zeros(Complex128,round(Integer,n/2))
+    u_np = zeros(Complex128,round(Integer,n/2))
+
+    index = 1:n
+
+    # populate the traces
+
+    for ii = 1:nSubs
+        # this will be slow most likely but it is readable
+        # we will need to modify this part
+        ind_0  = DDM.subDomains[ii].ind_0
+        ind_1  = DDM.subDomains[ii].ind_1
+        ind_n  = DDM.subDomains[ii].ind_n
+        ind_np = DDM.subDomains[ii].ind_np
+
+        if ii != 1
+            u_0[DDM.Lims1[ii-1,1]:DDM.Lims1[ii-1,2]] = uLocalArray[ii][ind_0]
+            u_1[DDM.Lims1[ii-1,1]:DDM.Lims1[ii-1,2]] = uLocalArray[ii][ind_1]
+        end
+        if ii !=nSubs
+            u_n[DDM.Lims1[ii,1]:DDM.Lims1[ii,2]] = uLocalArray[ii][ind_n]
+            u_np[DDM.Lims1[ii,1]:DDM.Lims1[ii,2]] = uLocalArray[ii][ind_np]
+        end
+
+    end
+
+    return (u_0, u_1, u_n, u_np)
+
+end
+
+# functions to write
+
+## TODO: Modify this function to be agnostic of the sizes of the local domains
+function vectorizePolarizedBdyDataRHS(DDM::DomainDecomposition,uBdyData)
+    # function to take the output of extract Boundary data and put it in vectorized form
+
+    nSubs = length(subDomains);
+    n = length(subDomains[1].model.x)*length(subDomains[1].model.y)
+
+    f1 = zeros(Complex{Float64},2*(nSubs-1)*n);
+    nInd = 1:n;
+
+    f1[nInd] = uBdyData[3][nInd];
+    for ii = 1:nSubs-2
+        f1[nInd+(2*ii-1)*n] = uBdyData[2][(ii*n +nInd)];
+        f1[nInd+2*ii*n]     = uBdyData[3][(ii*n +nInd)];
+    end
+    f1[nInd+(2*nSubs-3)*n] = uBdyData[2][(nSubs-1)*n+nInd];
+
+    f0 = zeros(Complex{Float64},2*(nSubs-1)*n);
+    nInd = 1:n;
+
+    f0[nInd] =  uBdyData[4][nInd];
+    for ii = 1:nSubs-2
+        f0[nInd+(2*ii-1)*n] = uBdyData[1][ii*n+ nInd];
+        f0[nInd+2*ii*n]     = uBdyData[4][ii*n+ nInd];
+    end
+    f0[nInd+(2*nSubs-3)*n] = uBdyData[1][(nSubs-1)*n+nInd];
+
+    return vcat(f1,f0)
+end
+
+
