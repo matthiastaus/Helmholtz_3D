@@ -155,6 +155,7 @@ function applyDinvDownOptDDM(DDM::DomainDecomposition, uGamma)
     nSurf = DDM.subDomains[1].model.size[2]*DDM.subDomains[1].model.size[3]
     nInd    = 1:nSurf;
 
+    # for now we will leave the dummyzero intact but we should modify them too
     dummyzero = zeros(Complex{Float64},nSurf);
     Dinvu     = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
 
@@ -197,3 +198,57 @@ function applyDinvDownOptDDM(DDM::DomainDecomposition, uGamma)
     return (Dinvu, Lu)
 end
 
+
+### TODO
+function applyDinvUpOpt(DDM::DomainDecomposition, uGamma)
+    # function to apply the DupInv but obtaining
+    # Uu at the same time for the same cost
+    # This would represent pair-wise reflections so it should
+    # increase the speed of the convergence
+    # obtaining the number of layers
+    nLayer = size(DDM.subDomains)[1];
+    nSurf = DDM.subDomains[1].model.size[2]*DDM.subDomains[1].model.size[3]
+    nInd    = 1:nSurf;
+
+    dummyzero = zeros(Complex{Float64},nSurf);
+    Dinvu     = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+    Lims1 = DDM.LimsN;
+    Lims2 = DDM.Lims1;
+
+    Uu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+
+    # last layer
+    ii = nLayer-1
+    Dinvu[Lims1[ii,1]:Lims1[ii,2]]  = -uGamma[Lims1[ii,1]:Lims1[ii,2]];
+    Dinvu[Lims2[ii,1]:Lims2[ii,2]]  = -uGamma[Lims2[ii,1]:Lims2[ii,2]];
+    v0  = Dinvu[Lims1[ii,1]:Lims1[ii,2]];
+    v1  = Dinvu[Lims2[ii,1]:Lims2[ii,2]];
+
+    for ii = nLayer-2:-1:1
+        u0 = uGamma[Lims1[ii,1]:Lims1[ii,2]];
+        u1 = uGamma[Lims2[ii,1]:Lims2[ii,2]];
+
+        (v0aux, v1aux, vN, vNp) = applyBlockOperator(DDM.subDomains[ii+1],dummyzero,dummyzero,v0,v1);
+
+        Dinvu[Lims1[ii,1]:Lims1[ii,2]] = vec(v0aux) - vec(u0);
+        Dinvu[Lims2[ii,1]:Lims2[ii,2]] = vec(v1aux) - vec(u1);
+
+        Uu[Lims1[ii+1,1]:Lims1[ii+1,2]] = vec(vN) - vec(v0);
+        Uu[Lims2[ii+1,1]:Lims2[ii+1,2]] = vec(vNp) ;
+
+        v0  = Dinvu[Lims1[ii,1]:Lims1[ii,2]] ;
+        v1  = Dinvu[Lims2[ii,1]:Lims2[ii,2]];
+    end
+
+    ii = 0
+
+    (v0aux, v1aux, vN, vNp) = applyBlockOperator(DDM.subDomains[ii+1],dummyzero,dummyzero,v0,v1);
+
+    Uu[Lims1[ii+1,1]:Lims1[ii+1,2]] = vec(vN) - vec(v0);
+    Uu[Lims2[ii+1,1]:Lims2[ii+1,2]] = vec(vNp)  ;
+
+
+    return (Dinvu, Uu)
+end

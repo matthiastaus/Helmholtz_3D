@@ -158,6 +158,10 @@ function PrecondGaussSeidelOpt2(subArray, v::Array{Complex128,1}, nit; verbose=f
 
     println("Applying the preconditioner Gauss-Seidel Optimized 2");
     u = 0*v;
+    # the for loops are not leaky need to define this outisde
+    vdown = 0*v;
+    udownaux = 0*v;
+    vup = 0*v ;
     for ii = 1:nit
 
         # splitting the vector in two parts
@@ -175,6 +179,95 @@ function PrecondGaussSeidelOpt2(subArray, v::Array{Complex128,1}, nit; verbose=f
         # applying the inverses
         (vdown, udownaux) = applyDinvDownOpt(subArray,udownaux);
         (vup  , udownaux) = applyDinvUpOpt(subArray, uupaux - udownaux);
+
+
+        if verbose
+            println("magnitude of the update = ", norm(u[:] -  vcat(vdown, vup ))/norm(v[:]));
+        end
+
+        # concatenating the solution
+        u  = vcat(vdown, vup );
+
+    end
+    u = vcat(vdown + udownaux, vup );
+    return u;
+end
+
+#######################################################################################
+#                                                                                     #
+#        Preconditioners for the Integral System using the DMM encapsulation          #
+#                                                                                     #
+#######################################################################################
+
+type IntegralPreconditionerDDM
+    nSubs::Int64
+    DDM::DomainDecomposition
+    nIt::Int64
+    P # permutation matrix
+    precondtype::ASCIIString # preconditioner type Jacobi, GaussSeidel Opt
+    function IntegralPreconditionerDDM(DDM::DomainDecomposition; nIt = 1, precondtype ="GSOpt2")
+        nSubs = length(DDM.subDomains)
+        # we need to fix the permutation matrix 
+        P = generatePermutationMatrix(n,nSubs);
+        new(nSubs, DDM,nIt, P, precondtype) # don't know if it's the best answer
+    end
+end
+
+# Encapsulation of the preconditioner in order to use preconditioned GMRES
+import Base.\
+
+function \(M::IntegralPreconditionerDDM, b::Array{Complex128,1})
+    # #println("Applying the polarized Traces Preconditioner")
+    # if M.precondtype == "GS"
+    #     return PrecondGaussSeidel(M.DDM, M.P*b, M.nIt)
+    # elseif M.precondtype == "GSOpt"
+    #     # using an optimized Gauss-Seidel to have one less solve per iteration
+    #     return PrecondGaussSeidelOpt(M.DDM, M.P*b, M.nIt)
+    # elseif M.precondtype == "GSOpt2"
+        # using an optimized Gauss-Seidel to have one less solve per iteration
+
+        return PrecondGaussSeidelOpt2DDM(M.DDM, M.P*b, M.nIt)
+    # elseif M.precondtype == "Jac"
+    #     return PrecondJacobi(M.DDM, M.P*b, M.nIt)
+    # end
+end
+
+
+function PrecondGaussSeidelOpt2DDM(DDM::DomainDecomposition, v::Array{Complex128,1}, nit; verbose=false)
+    # function to apply the block Gauss-Seidel Preconditioner
+    # in this case we use the jump conditions to eliminate one local
+    # solve in order to accelerate the execution time
+    # Now we have only 2 local solves per layer per application of the
+    # preconditioner, in this case we
+    # input :   DDM       encapsulation class for the domain decomposition
+    #           v         rhs to be solved
+    #           nit       number of iterations
+    # output:   u         Approximated solution
+    # using a first guess equals to zero
+
+    println("Applying the preconditioner Gauss-Seidel Optimized 2");
+    u = 0*v;
+    vdown = 0*v;
+    udownaux = 0*v;
+    vup = 0*v ;
+
+    for ii = 1:nit
+
+        # splitting the vector in two parts
+        udown = u[1:round(Integer,end/2)];
+        uup   = u[(1+round(Integer,end/2)):end];
+
+        # f - Ru^{n-1}
+        if norm(u)  != 0
+            udownaux = v[1:round(Integer,end/2)]  - udownaux;
+        else
+            udownaux = v[1:round(Integer,end/2)]
+        end
+        uupaux   = v[(1+round(Integer,end/2)):end] ;
+
+        # applying the inverses
+        (vdown, udownaux) = applyDinvDownOpt(DDM,udownaux);
+        (vup  , udownaux) = applyDinvUpOpt(DDM, uupaux - udownaux);
 
 
         if verbose

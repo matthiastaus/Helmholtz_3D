@@ -19,7 +19,7 @@ type Subdomain
     Hnp_n::SparseMatrixCSC{Complex{Float64},Int64}
     Hn_np::SparseMatrixCSC{Complex{Float64},Int64}
 
-    function Subdomain(model::Model, dummy)
+    function Subdomain(model::Model, dummy::Int64)
         # m = matrix(nx,ny,nz)
         (ind_0, ind_1, ind_n , ind_np) = extractBoundaryIndices(model);
         indVolInt = extractVolIntIndices(model);
@@ -1045,6 +1045,75 @@ function applyMMOptUmf(subDomains, uGamma)
     end
     ii = nLayer-1;
     Mu[nInd + (2*ii-1)*nSurf] = -  u0Up[ii+1] + vec(V[ii+1][1][:,3])
+
+    return vcat(Mu1,Mu)
+
+end
+
+
+function applyMMOptLims(subDomains, uGamma)
+    # function to apply M to uGamma
+    # we use a Limits vector in order to handle subdomains
+    # with a different number of boundary points
+    # input subDomains : an array of subdomains
+    #       uGamma   : data on the boundaries in vector form
+
+    uDown = uGamma[1:round(Integer, end/2)]
+    uUp   = uGamma[1+round(Integer, end/2):end]
+    # convert uGamma in a suitable vector to be applied
+    (u0Down,u1Down,uNDown,uNpDown) = devectorizeBdyData(subDomains, uDown);
+    (u0Up  ,u1Up  ,uNUp  ,uNpUp)   = devectorizeBdyData(subDomains, uUp);
+
+    # obtaining the number of layers
+    nLayer = size(subDomains)[1];
+    nSurf = subDomains[1].model.size[2]*subDomains[1].model.size[3]
+    nInd = 1:nSurf;
+
+    # building the Limits vectors in order to delimite the entries in the
+    # vector containing the application of the integral operator
+    Lims1 = zeros(Int64, nLayer-1,2)
+    Lims2 = zeros(Int64, nLayer-1,2)
+    Lims1[1,:] = [1,length(subDomains[1].ind_n)];
+    Lims2[1,:] = Lims1[1,:] +  length(subDomains[2].ind_1);
+
+    for ii = 2:nLayer-1
+        Lims1[ii,:] = Lims2[ii-1,:] + length(subDomains[ii].ind_n);
+        Lims2[ii,:] = Lims1[ii,:]   + length(subDomains[ii+1].ind_1);
+    end
+
+    #TODO modify this functio in order to solve the three rhs in one shot
+    # applying this has to be done in parallel applying RemoteRefs
+    v1 = [ applyBlockOperator(subDomains[ii],u0Down[ii]         ,u1Down[ii]         ,
+                              uNUp[ii]+uNDown[ii],uNpUp[ii]+uNpDown[ii]) for ii = 1:nLayer ];
+    vN = [ applyBlockOperator(subDomains[ii],u0Down[ii]+u0Up[ii],u1Down[ii]+u1Up[ii],
+                              uNUp[ii]           ,uNpUp[ii]            ) for ii = 1:nLayer ];
+
+    Mu1 = zeros(Complex{Float64},round(Integer,maximum(Lims2)) );
+
+    Mu1[Lims1[1,1]:Lims1[1,2]] = - uNUp[1] - uNDown[1] + vec(vN[1][3]);
+
+    for ii=1:nLayer-2
+        Mu1[Lims2[ii,1]:Lims2[ii,2]]     =  - u1Up[ii+1] - u1Down[ii+1] + vec(v1[ii+1][2]);
+        Mu1[Lims1[ii+1,1]:Lims1[ii+1,2]] = - uNUp[ii+1] - uNDown[ii+1] + vec(vN[ii+1][3]);
+    end
+    ii = nLayer-1;
+    Mu1[Lims2[ii,1]:Lims2[ii,2]] = - u1Up[ii+1] - u1Down[ii+1] + vec(v1[ii+1][2]) ;
+
+
+    v1 = [ applyBlockOperator(subDomains[ii],u0Down[ii],u1Down[ii],uNUp[ii]+uNDown[ii],uNpUp[ii]+uNpDown[ii]) for ii = 1:nLayer ];
+    vN = [ applyBlockOperator(subDomains[ii],u0Up[ii]+u0Down[ii],u1Down[ii]+u1Up[ii],uNUp[ii],uNpUp[ii]) for ii = 1:nLayer ];
+
+    Mu = zeros(Complex{Float64},2*(nLayer-1)*nSurf);
+
+
+    Mu[Lims1[1,1]:Lims1[1,2]] =  vec(vN[1][4])- uNpDown[1] ;
+
+    for ii=1:nLayer-2
+        Mu[Lims2[ii,1]:Lims2[ii,2]] = - u0Up[ii+1] + vec(v1[ii+1][1]);
+        Mu[Lims1[ii+1,1]:Lims1[ii+1,2]] = - uNpDown[ii+1] + vec(vN[ii+1][4]);
+    end
+    ii = nLayer-1;
+    Mu[Lims2[ii,1]:Lims2[ii,2]] = -  u0Up[ii+1] + vec(v1[ii+1][1])
 
     return vcat(Mu1,Mu)
 
